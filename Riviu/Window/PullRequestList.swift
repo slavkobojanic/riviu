@@ -77,9 +77,11 @@ struct PullRequestList: View {
             } actions: {
                 Button("Try Again") { inbox.refresh() }
             }
+            .frame(maxHeight: .infinity)
         } else if inbox.pullRequests.isEmpty && !inbox.isLoading {
             ContentUnavailableView("No Pull Requests", systemImage: "tray",
                                    description: Text("Nothing matches these filters."))
+                .frame(maxHeight: .infinity)
         } else {
             List {
                 ForEach(inbox.pullRequests) { summary in
