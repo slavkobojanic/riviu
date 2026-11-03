@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct RiviuApp: App {
+    @NSApplicationDelegateAdaptor private var appDelegate: AppDelegate
     @State private var settings: AppSettings
     @State private var account: GitHubAccount
     @State private var inbox: PullRequestInbox
@@ -10,6 +11,7 @@ struct RiviuApp: App {
     @State private var aiReviews: AIReviewStore
     @State private var watcher: ReviewRequestWatcher
     private let notifications = ReviewRequestNotifications()
+    private let mainWindow = MainWindow()
 
     init() {
         let settings = AppSettings()
@@ -27,22 +29,52 @@ struct RiviuApp: App {
         _watcher = State(initialValue: watcher)
         _chats = State(initialValue: ChatStore(makeProvider: { try AISetup.makeProvider(for: .chat, settings: settings) }))
 
-        notifications.onOpen = { workspace.open($0) }
+        let mainWindow = mainWindow
+        notifications.onOpen = { reference in
+            mainWindow.show()
+            workspace.open(reference)
+        }
         watcher.start()
     }
 
     var body: some Scene {
-        Window("Riviu", id: "review") {
-            ReviewWindow(workspace: workspace, inbox: inbox, account: account, chats: chats, aiReviews: aiReviews, settings: settings)
+        Window("Riviu", id: MainWindow.id) {
+            ReviewWindow(workspace: workspace, inbox: inbox, account: account, chats: chats, aiReviews: aiReviews,
+                         watcher: watcher, settings: settings)
+                .remembersOpenWindow(in: mainWindow)
+                .onAppear { appDelegate.settings = settings }
+                .onDisappear { mainWindow.didClose(keepsRunningInMenuBar: settings.keepsRunningInMenuBar) }
         }
         .defaultSize(width: 1500, height: 920)
         .commands {
-            ReviewCommands(workspace: workspace, inbox: inbox, settings: settings)
+            ReviewCommands(workspace: workspace, watcher: watcher, settings: settings)
         }
+
+        MenuBarExtra(isInserted: $settings.keepsRunningInMenuBar) {
+            MenuBarPanel(watcher: watcher, account: account, aiReviews: aiReviews, workspace: workspace, mainWindow: mainWindow)
+        } label: {
+            MenuBarLabel(waitingCount: watcher.requests.count)
+        }
+        .menuBarExtraStyle(.window)
 
         Settings {
             SettingsView(settings: settings, account: account, watcher: watcher)
                 .environment(settings)
+        }
+    }
+}
+
+/// The menu bar icon, with the number of pull requests waiting for your review.
+private struct MenuBarLabel: View {
+    let waitingCount: Int
+
+    var body: some View {
+        if waitingCount > 0 {
+            Label("\(waitingCount)", systemImage: "arrow.triangle.pull")
+                .labelStyle(.titleAndIcon)
+        } else {
+            Label("Riviu", systemImage: "arrow.triangle.pull")
+                .labelStyle(.iconOnly)
         }
     }
 }

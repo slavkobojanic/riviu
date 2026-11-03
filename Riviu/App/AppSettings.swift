@@ -114,6 +114,8 @@ final class AppSettings {
     var contextLines: Int { didSet { save(contextLines, for: "contextLines") } }
     var highlightsWordChanges: Bool { didSet { save(highlightsWordChanges, for: "highlightsWordChanges") } }
     var showsChatPanel: Bool { didSet { save(showsChatPanel, for: "showsChatPanel") } }
+    /// Keeps Riviu in the menu bar, still checking for review requests, after its window is closed.
+    var keepsRunningInMenuBar: Bool { didSet { save(keepsRunningInMenuBar, for: "keepsRunningInMenuBar") } }
 
     var reviewProvider: AIProviderKind { didSet { save(reviewProvider.rawValue, for: "reviewProvider") } }
     var chatProvider: AIProviderKind { didSet { save(chatProvider.rawValue, for: "chatProvider") } }
@@ -152,6 +154,7 @@ final class AppSettings {
         contextLines = defaults.object(forKey: "contextLines") as? Int ?? 3
         highlightsWordChanges = defaults.object(forKey: "highlightsWordChanges") as? Bool ?? true
         showsChatPanel = defaults.object(forKey: "showsChatPanel") as? Bool ?? true
+        keepsRunningInMenuBar = defaults.object(forKey: "keepsRunningInMenuBar") as? Bool ?? true
         reviewProvider = AIProviderKind(rawValue: defaults.string(forKey: "reviewProvider") ?? "") ?? .claudeCode
         chatProvider = AIProviderKind(rawValue: defaults.string(forKey: "chatProvider") ?? "") ?? .claudeCode
         explainProvider = AIProviderKind(rawValue: defaults.string(forKey: "explainProvider") ?? "") ?? .claudeCode

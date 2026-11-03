@@ -195,7 +195,7 @@ private struct PullRequestHeader: View {
                     .font(.caption)
                     .lineLimit(1)
                 HStack(spacing: 6) {
-                    AIStatusLabel(reference: pullRequest.reference, aiReviews: aiReviews)
+                    AIReviewStatusLabel(reference: pullRequest.reference, aiReviews: aiReviews, placeholder: "Overview & AI summary")
                     Spacer(minLength: 4)
                     Image(systemName: "chevron.right")
                         .font(.caption.weight(.semibold))
@@ -216,38 +216,5 @@ private struct PullRequestHeader: View {
         if workspace.showsOverview { return AnyShapeStyle(Color.accentColor.opacity(0.2)) }
         if isHovered { return AnyShapeStyle(.fill.tertiary) }
         return AnyShapeStyle(.clear)
-    }
-}
-
-/// "High risk · 3 findings", "AI reviewing…", or a prompt to get a summary.
-private struct AIStatusLabel: View {
-    let reference: PullRequestReference
-    let aiReviews: AIReviewStore
-
-    var body: some View {
-        switch aiReviews.activity(for: reference) {
-        case .reviewing:
-            HStack(spacing: 6) {
-                ProgressView()
-                    .controlSize(.mini)
-                Text("AI reviewing…")
-            }
-            .font(.caption)
-        case .failed:
-            Label("AI review failed", systemImage: "exclamationmark.triangle.fill")
-                .font(.caption)
-                .foregroundStyle(.red)
-        case nil:
-            if let review = aiReviews.review(for: reference) {
-                HStack(spacing: 6) {
-                    SeverityBadge(severity: review.risk, label: "\(review.risk.rawValue) risk")
-                    Text(review.findings.count == 1 ? "1 finding" : "\(review.findings.count) findings")
-                        .font(.caption)
-                }
-            } else {
-                Label("Overview & AI summary", systemImage: "sparkles")
-                    .font(.caption)
-            }
-        }
     }
 }

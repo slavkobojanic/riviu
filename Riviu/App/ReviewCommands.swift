@@ -4,7 +4,7 @@ import SwiftUI
 /// Menu bar commands and their keyboard shortcuts.
 struct ReviewCommands: Commands {
     let workspace: ReviewWorkspace
-    let inbox: PullRequestInbox
+    let watcher: ReviewRequestWatcher
     let settings: AppSettings
 
     var body: some Commands {
@@ -20,7 +20,7 @@ struct ReviewCommands: Commands {
         }
 
         CommandMenu("Review") {
-            Button("Refresh Pull Requests") { inbox.refresh() }
+            Button("Refresh Pull Requests") { watcher.refreshAll() }
                 .keyboardShortcut("r")
             Divider()
             Button(workspace.isSelectedFileViewed ? "Mark as Not Viewed" : "Mark as Viewed") { workspace.toggleViewedForSelectedFile() }

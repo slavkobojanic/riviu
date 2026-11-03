@@ -6,6 +6,7 @@ struct PullRequestList: View {
     @Bindable var inbox: PullRequestInbox
     let account: GitHubAccount
     let workspace: ReviewWorkspace
+    let aiReviews: AIReviewStore
     let onOpen: (PullRequestReference) -> Void
 
     @State private var searchText = ""
@@ -36,16 +37,10 @@ struct PullRequestList: View {
 
     private var filters: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Picker("Show", selection: $inbox.query.involvement) {
-                    ForEach(PullRequestQuery.Involvement.allCases, id: \.self) { Text($0.title).tag($0) }
-                }
-                .labelsHidden()
-                Button("Refresh", systemImage: "arrow.clockwise") { inbox.refresh() }
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(.borderless)
-                    .help("Refresh (⌘R)")
+            Picker("Show", selection: $inbox.query.involvement) {
+                ForEach(PullRequestQuery.Involvement.allCases, id: \.self) { Text($0.title).tag($0) }
             }
+            .labelsHidden()
             Picker("State", selection: $inbox.query.state) {
                 ForEach(PullRequestQuery.State.allCases, id: \.self) { Text($0.title).tag($0) }
             }
@@ -87,7 +82,8 @@ struct PullRequestList: View {
                 ForEach(inbox.pullRequests) { summary in
                     let reference = PullRequestReference(repository: summary.repository, number: summary.number)
                     Button { onOpen(reference) } label: {
-                        PullRequestRow(summary: summary, isOpen: workspace.pullRequest?.reference == reference)
+                        PullRequestRow(summary: summary, reference: reference, isOpen: workspace.pullRequest?.reference == reference,
+                                       aiReviews: aiReviews)
                     }
                     .buttonStyle(.plain)
                 }
@@ -121,6 +117,7 @@ struct PullRequestList: View {
                                 .lineLimit(2)
                             Text("#\(pullRequest.number) · \(pullRequest.author)")
                                 .font(.caption)
+                            AIReviewStatusLabel(reference: pullRequest.reference, aiReviews: aiReviews)
                         }
                     }
                     .buttonStyle(.plain)
@@ -133,7 +130,9 @@ struct PullRequestList: View {
 
 private struct PullRequestRow: View {
     let summary: GitHubPullRequestSummary
+    let reference: PullRequestReference
     let isOpen: Bool
+    let aiReviews: AIReviewStore
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -155,6 +154,7 @@ private struct PullRequestRow: View {
             }
             .font(.caption)
             .lineLimit(1)
+            AIReviewStatusLabel(reference: reference, aiReviews: aiReviews)
             if !summary.labels.isEmpty {
                 HStack(spacing: 4) {
                     ForEach(summary.labels.prefix(3), id: \.name) { label in

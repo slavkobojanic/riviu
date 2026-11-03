@@ -6,6 +6,9 @@ import RiviuGitHub
 /// notification and, if turned on, runs an AI review so the summary is ready when you open it.
 @Observable
 final class ReviewRequestWatcher {
+    /// Open pull requests waiting for your review, newest activity first.
+    private(set) var requests: [GitHubPullRequestSummary] = []
+    private(set) var isChecking = false
     private(set) var lastChecked: Date?
     private(set) var errorMessage: String?
 
@@ -15,6 +18,8 @@ final class ReviewRequestWatcher {
     @ObservationIgnored private let inbox: PullRequestInbox
     @ObservationIgnored private let notifications: ReviewRequestNotifications
     @ObservationIgnored private var loop: Task<Void, Never>?
+    @ObservationIgnored private var reviewQueue: [(GitHubPullRequestSummary, PullRequestReference)] = []
+    @ObservationIgnored private var isWorkingThroughQueue = false
 
     init(account: GitHubAccount, settings: AppSettings, aiReviews: AIReviewStore, inbox: PullRequestInbox,
          notifications: ReviewRequestNotifications) {
@@ -45,9 +50,16 @@ final class ReviewRequestWatcher {
         }
     }
 
+    /// Refreshes the pull request list and checks for new review requests, for the Refresh button and ⌘R.
+    func refreshAll() {
+        inbox.refresh()
+        Task { await checkNow() }
+    }
+
     func checkNow() async {
-        guard let client = account.client, let login = account.user?.login else { return }
-        let requests: [GitHubPullRequestSummary]
+        guard let client = account.client, let login = account.user?.login, !isChecking else { return }
+        isChecking = true
+        defer { isChecking = false }
         do {
             requests = try await client.searchPullRequests(PullRequestQuery()) // open, review requested from me
             errorMessage = nil
@@ -69,22 +81,46 @@ final class ReviewRequestWatcher {
 
         inbox.refresh()
         for (summary, reference) in newRequests {
-            await handleNewRequest(summary, reference: reference)
+            if settings.notifiesAboutReviewRequests {
+                notifications.post(title: "Review requested", body: notificationText(for: summary), about: reference)
+            }
+            if settings.reviewsNewRequestsWithAI {
+                aiReviews.queue(reference)
+                reviewQueue.append((summary, reference))
+            }
         }
+        Task { await workThroughReviewQueue() }
     }
 
-    private func handleNewRequest(_ summary: GitHubPullRequestSummary, reference: PullRequestReference) async {
-        let description = "\(summary.title) — from \(summary.user.login)"
-        if settings.notifiesAboutReviewRequests {
-            notifications.post(title: "Review requested", body: description, about: reference)
-        }
-        guard settings.reviewsNewRequestsWithAI,
-              let pullRequest = try? await account.loader.pullRequest(reference) else { return }
+    // MARK: - AI reviews of new requests
 
-        await aiReviews.runIfNeeded(for: pullRequest)
+    /// One review at a time, so a burst of requests doesn't start several AI runs at once.
+    private func workThroughReviewQueue() async {
+        guard !isWorkingThroughQueue else { return }
+        isWorkingThroughQueue = true
+        while !reviewQueue.isEmpty {
+            let (summary, reference) = reviewQueue.removeFirst()
+            await review(summary, reference: reference)
+        }
+        isWorkingThroughQueue = false
+    }
+
+    private func review(_ summary: GitHubPullRequestSummary, reference: PullRequestReference) async {
+        do {
+            let pullRequest = try await account.loader.pullRequest(reference)
+            await aiReviews.runIfNeeded(for: pullRequest)
+        } catch {
+            aiReviews.fail(reference, message: error.localizedDescription)
+            return
+        }
         guard settings.notifiesAboutReviewRequests, let review = aiReviews.review(for: reference) else { return }
         let findings = review.findings.count == 1 ? "1 finding" : "\(review.findings.count) findings"
         notifications.post(title: "Review requested · \(review.risk.rawValue) risk",
-                           body: "\(description)\nAI summary ready, \(findings).", about: reference, playsSound: false)
+                           body: "\(notificationText(for: summary))\nAI summary ready, \(findings).",
+                           about: reference, playsSound: false)
+    }
+
+    private func notificationText(for summary: GitHubPullRequestSummary) -> String {
+        "\(summary.title) — from \(summary.user.login)"
     }
 }

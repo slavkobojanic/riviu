@@ -66,7 +66,7 @@ private struct AISummaryCard: View {
                     .font(.headline)
                     .symbolRenderingMode(.multicolor)
                 Spacer()
-                if let review, !aiReviews.isReviewing(pullRequest.reference) {
+                if let review, aiReviews.activity(for: pullRequest.reference) == nil {
                     SeverityBadge(severity: review.risk, label: "\(review.risk.rawValue) risk")
                 }
             }
@@ -80,11 +80,13 @@ private struct AISummaryCard: View {
     @ViewBuilder
     private var content: some View {
         switch aiReviews.activity(for: pullRequest.reference) {
+        case .queued:
+            Label("A summary is coming once the AI finishes the reviews ahead of this one.", systemImage: "clock")
         case let .reviewing(author):
             HStack(spacing: 10) {
                 ProgressView()
                     .controlSize(.small)
-                Text("Reviewing with \(author)… This can take a minute or two.")
+                Text("Generating a summary with \(author)… This can take a minute or two. Findings appear in the diff when it's done.")
             }
         case let .failed(message):
             AIErrorView(message: message)

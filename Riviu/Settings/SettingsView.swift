@@ -40,6 +40,7 @@ private struct GeneralSettingsTab: View {
             Stepper("Context lines around changes: \(settings.contextLines)", value: $settings.contextLines, in: 0...20)
             Toggle("Highlight changed words within lines", isOn: $settings.highlightsWordChanges)
             Toggle("Show AI chat panel", isOn: $settings.showsChatPanel)
+            Toggle("Keep running in the menu bar when the window is closed", isOn: $settings.keepsRunningInMenuBar)
         }
         .formStyle(.grouped)
     }

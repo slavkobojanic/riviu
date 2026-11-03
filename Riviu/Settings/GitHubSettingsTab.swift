@@ -49,7 +49,6 @@ struct GitHubSettingsTab: View {
 private struct ReviewRequestsSection: View {
     @Bindable var settings: AppSettings
     let watcher: ReviewRequestWatcher
-    @State private var isChecking = false
 
     var body: some View {
         Section {
@@ -65,22 +64,22 @@ private struct ReviewRequestsSection: View {
                 HStack {
                     status
                     Spacer()
-                    Button("Check Now", action: checkNow)
-                        .disabled(isChecking)
+                    Button("Check Now") { Task { await watcher.checkNow() } }
+                        .disabled(watcher.isChecking)
                 }
             }
             .disabled(!settings.checksForReviewRequests)
         } header: {
             Text("Review requests")
         } footer: {
-            Text("Riviu checks while it's open. The AI review uses the provider and model set for AI Review in the AI tab.")
+            Text("Riviu checks while it's open, including from the menu bar. The AI review uses the provider and model set for AI Review in the AI tab.")
                 .font(.caption)
         }
     }
 
     @ViewBuilder
     private var status: some View {
-        if isChecking {
+        if watcher.isChecking {
             ProgressView()
                 .controlSize(.small)
         } else if let errorMessage = watcher.errorMessage {
@@ -91,14 +90,6 @@ private struct ReviewRequestsSection: View {
             Text("Last checked \(lastChecked, format: .relative(presentation: .named))")
         } else {
             Text("Not checked yet")
-        }
-    }
-
-    private func checkNow() {
-        isChecking = true
-        Task {
-            await watcher.checkNow()
-            isChecking = false
         }
     }
 }

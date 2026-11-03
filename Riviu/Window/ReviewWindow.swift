@@ -8,12 +8,13 @@ struct ReviewWindow: View {
     let account: GitHubAccount
     let chats: ChatStore
     let aiReviews: AIReviewStore
+    let watcher: ReviewRequestWatcher
     @Bindable var settings: AppSettings
     @State private var showsReviewSheet = false
 
     var body: some View {
         NavigationSplitView {
-            Sidebar(workspace: workspace, inbox: inbox, account: account, aiReviews: aiReviews)
+            Sidebar(workspace: workspace, inbox: inbox, account: account, aiReviews: aiReviews, watcher: watcher)
                 .navigationSplitViewColumnWidth(min: 260, ideal: 320, max: 480)
         } detail: {
             ReviewDetail(workspace: workspace, aiReviews: aiReviews, display: display, settings: settings, chats: chats)

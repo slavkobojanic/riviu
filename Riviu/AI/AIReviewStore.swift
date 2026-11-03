@@ -20,6 +20,8 @@ nonisolated struct AIReview: Codable, Sendable {
 @Observable
 final class AIReviewStore {
     enum Activity: Equatable {
+        /// Waiting for other reviews to finish first.
+        case queued
         case reviewing(author: String)
         case failed(String)
     }
@@ -52,6 +54,13 @@ final class AIReviewStore {
         return false
     }
 
+    /// Shows that a review is coming, before it starts.
+    func queue(_ reference: PullRequestReference) {
+        if !isReviewing(reference) {
+            activities[reference] = .queued
+        }
+    }
+
     /// Starts a review without waiting for it, for the Run AI Review button.
     func start(for pullRequest: PullRequest) {
         Task { await run(for: pullRequest) }
@@ -59,8 +68,16 @@ final class AIReviewStore {
 
     /// Skips pull requests that were already reviewed at their latest commit.
     func runIfNeeded(for pullRequest: PullRequest) async {
-        if review(for: pullRequest.reference)?.headSHA == pullRequest.headSHA { return }
+        if review(for: pullRequest.reference)?.headSHA == pullRequest.headSHA {
+            activities[pullRequest.reference] = nil
+            return
+        }
         await run(for: pullRequest)
+    }
+
+    /// For a queued review that can't run, for example because the pull request didn't load.
+    func fail(_ reference: PullRequestReference, message: String) {
+        activities[reference] = .failed(message)
     }
 
     func run(for pullRequest: PullRequest) async {
