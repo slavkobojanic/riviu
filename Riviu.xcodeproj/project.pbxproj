@@ -6,6 +6,13 @@
 	objectVersion = 90;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		0000000000000000A0000004 /* RiviuSyntax in Frameworks */ = {isa = PBXBuildFile; productRef = 0000000000000000A0000002 /* RiviuSyntax */; };
+		0000000000000000A0000005 /* RiviuMarkdown in Frameworks */ = {isa = PBXBuildFile; productRef = 0000000000000000A0000003 /* RiviuMarkdown */; };
+		0000000000000000A0000007 /* RiviuDiff in Frameworks */ = {isa = PBXBuildFile; productRef = 0000000000000000A0000006 /* RiviuDiff */; };
+		0000000000000000A0000009 /* RiviuAI in Frameworks */ = {isa = PBXBuildFile; productRef = 0000000000000000A0000008 /* RiviuAI */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		000000000000000000000120 /* Riviu.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Riviu.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -22,6 +29,10 @@
 		000000000000000130000000 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
+				0000000000000000A0000004 /* RiviuSyntax in Frameworks */,
+				0000000000000000A0000005 /* RiviuMarkdown in Frameworks */,
+				0000000000000000A0000009 /* RiviuAI in Frameworks */,
+				0000000000000000A0000007 /* RiviuDiff in Frameworks */,
 			);
 		};
 /* End PBXFrameworksBuildPhase section */
@@ -60,6 +71,11 @@
 				000000000000000000000010 /* Riviu */,
 			);
 			name = Riviu;
+			packageProductDependencies = (
+				0000000000000000A0000002 /* RiviuSyntax */,
+				0000000000000000A0000003 /* RiviuMarkdown */,
+				0000000000000000A0000006 /* RiviuDiff */,
+			);
 			productName = MyApp;
 			productReference = 000000000000000000000120 /* Riviu.app */;
 			productType = "com.apple.product-type.application";
@@ -88,6 +104,9 @@
 			);
 			mainGroup = 000000000000000000000001;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				0000000000000000A0000001 /* XCLocalSwiftPackageReference "Packages/RiviuKit" */,
+			);
 			preferredProjectObjectVersion = 90;
 			productRefGroup = 000000000000000000000020 /* Products */;
 			projectDirPath = "";
@@ -253,7 +272,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 6ZG9U52KS9;
-				ENABLE_APP_SANDBOX = YES;
+				ENABLE_APP_SANDBOX = NO;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -280,7 +299,7 @@
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2,7";
 			};
 			name = Debug;
@@ -291,7 +310,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 6ZG9U52KS9;
-				ENABLE_APP_SANDBOX = YES;
+				ENABLE_APP_SANDBOX = NO;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -318,7 +337,7 @@
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2,7";
 			};
 			name = Release;
@@ -343,6 +362,32 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		0000000000000000A0000001 /* XCLocalSwiftPackageReference "Packages/RiviuKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/RiviuKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		0000000000000000A0000002 /* RiviuSyntax */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RiviuSyntax;
+		};
+		0000000000000000A0000003 /* RiviuMarkdown */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RiviuMarkdown;
+		};
+		0000000000000000A0000006 /* RiviuDiff */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RiviuDiff;
+		};
+		0000000000000000A0000008 /* RiviuAI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RiviuAI;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 000000000000000000000000 /* Project object */;
 }
