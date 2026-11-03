@@ -20,6 +20,7 @@ struct ChatPanel: View {
             } else {
                 ContentUnavailableView("No Pull Request Open", systemImage: "sparkles",
                                        description: Text("Open a pull request to chat about it."))
+                    .frame(maxHeight: .infinity)
             }
         }
     }
@@ -60,7 +61,6 @@ private struct ChatConversation: View {
     let pullRequest: PullRequest
     @Environment(AppSettings.self) private var settings
     @State private var draft = ""
-    @FocusState private var isComposerFocused: Bool
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -84,7 +84,8 @@ private struct ChatConversation: View {
             }
         }
         .safeAreaInset(edge: .bottom) {
-            composer
+            ChatComposer(draft: $draft, isReplying: chats.isReplying,
+                         send: { send(draft) }, stop: { chats.stopReplying() })
         }
     }
 
@@ -106,31 +107,6 @@ private struct ChatConversation: View {
             questions.append("What changed in \(file.fileName)?")
         }
         return questions
-    }
-
-    private var composer: some View {
-        HStack(alignment: .bottom, spacing: 8) {
-            TextField("Ask about this pull request…", text: $draft, axis: .vertical)
-                .textFieldStyle(.plain)
-                .lineLimit(1...8)
-                .focused($isComposerFocused)
-                .onSubmit { send(draft) }
-            if chats.isReplying {
-                Button("Stop", systemImage: "stop.fill") { chats.stopReplying() }
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(.glass)
-                    .buttonBorderShape(.circle)
-            } else {
-                Button("Send", systemImage: "arrow.up") { send(draft) }
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(.glassProminent)
-                    .buttonBorderShape(.circle)
-                    .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
-        }
-        .padding(10)
-        .glassEffect(.regular, in: .rect(cornerRadius: 18))
-        .padding(10)
     }
 
     private func send(_ text: String) {
