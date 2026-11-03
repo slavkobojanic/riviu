@@ -37,20 +37,23 @@ struct PullRequestList: View {
 
     private var filters: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Picker("Show", selection: $inbox.query.involvement) {
-                ForEach(PullRequestQuery.Involvement.allCases, id: \.self) { Text($0.title).tag($0) }
+            HStack(spacing: 8) {
+                Picker("Show", selection: $inbox.query.involvement) {
+                    ForEach(PullRequestQuery.Involvement.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                .fixedSize()
+                Picker("Repository", selection: $inbox.query.repository) {
+                    Text("All repositories").tag(String?.none)
+                    Divider()
+                    ForEach(inbox.knownRepositories, id: \.self) { Text($0).tag(String?.some($0)) }
+                }
+                Spacer(minLength: 0)
             }
             .labelsHidden()
             Picker("State", selection: $inbox.query.state) {
                 ForEach(PullRequestQuery.State.allCases, id: \.self) { Text($0.title).tag($0) }
             }
             .pickerStyle(.segmented)
-            .labelsHidden()
-            Picker("Repository", selection: $inbox.query.repository) {
-                Text("All repositories").tag(String?.none)
-                Divider()
-                ForEach(inbox.knownRepositories, id: \.self) { Text($0).tag(String?.some($0)) }
-            }
             .labelsHidden()
             TextField("Search, e.g. label:bug", text: $searchText)
                 .textFieldStyle(.roundedBorder)
