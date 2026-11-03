@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 36 36">
+  <!-- The app icon's face as a one-colour template: glasses, eyes and a grin -->
+  <rect x="2.5" y="7.5" width="13" height="10.5" rx="4.6" fill="none" stroke="#000" stroke-width="2.6"/>
+  <rect x="20.5" y="7.5" width="13" height="10.5" rx="4.6" fill="none" stroke="#000" stroke-width="2.6"/>
+  <path d="M15.6 11.6 Q18 9.4 20.4 11.6" fill="none" stroke="#000" stroke-width="2.2" stroke-linecap="round"/>
+  <circle cx="9" cy="12.9" r="2.3" fill="#000"/>
+  <circle cx="27" cy="12.9" r="2.3" fill="#000"/>
+  <path d="M8.5 22 Q18 24.6 27.5 22 Q26.6 31.5 18 31.5 Q9.4 31.5 8.5 22 Z" fill="#000"/>
+</svg>

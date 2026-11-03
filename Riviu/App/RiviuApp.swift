@@ -70,10 +70,10 @@ private struct MenuBarLabel: View {
 
     var body: some View {
         if waitingCount > 0 {
-            Label("\(waitingCount)", systemImage: "arrow.triangle.pull")
+            Label("\(waitingCount)", image: "MenuBarIcon")
                 .labelStyle(.titleAndIcon)
         } else {
-            Label("Riviu", systemImage: "arrow.triangle.pull")
+            Label("Riviu", image: "MenuBarIcon")
                 .labelStyle(.iconOnly)
         }
     }
