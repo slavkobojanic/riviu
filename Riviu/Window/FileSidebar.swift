@@ -5,11 +5,13 @@ import SwiftUI
 /// The open pull request's changed files as a folder tree.
 struct FileSidebar: View {
     let workspace: ReviewWorkspace
+    let aiReviews: AIReviewStore
     let onBack: () -> Void
     @State private var expandedFolders: Set<String>
 
-    init(workspace: ReviewWorkspace, onBack: @escaping () -> Void) {
+    init(workspace: ReviewWorkspace, aiReviews: AIReviewStore, onBack: @escaping () -> Void) {
         self.workspace = workspace
+        self.aiReviews = aiReviews
         self.onBack = onBack
         let paths = workspace.pullRequest?.files.map(\.path) ?? []
         _expandedFolders = State(initialValue: Set(FileTreeNode.tree(for: paths).flatMap(\.folderIDs)))
@@ -22,7 +24,9 @@ struct FileSidebar: View {
                 .padding(.horizontal, 14)
                 .padding(.top, 6)
             if let pullRequest = workspace.pullRequest, workspace.loadingReference == nil {
-                PullRequestHeader(pullRequest: pullRequest)
+                PullRequestHeader(pullRequest: pullRequest, workspace: workspace, aiReviews: aiReviews)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
                 List(selection: selection) {
                     Section {
                         ForEach(FileTreeNode.tree(for: pullRequest.files.map(\.path))) { node in
@@ -42,9 +46,10 @@ struct FileSidebar: View {
         }
     }
 
-    /// Clicking a folder doesn't change the selected file.
+    /// No file is highlighted while the overview is shown. Clicking a folder doesn't change the selected file.
     private var selection: Binding<String?> {
-        Binding(get: { workspace.selectedFilePath }, set: { workspace.selectFile(at: $0) })
+        Binding(get: { workspace.showsOverview ? nil : workspace.selectedFilePath },
+                set: { workspace.selectFile(at: $0) })
     }
 }
 
@@ -170,22 +175,79 @@ private struct FileRow: View {
     }
 }
 
+/// The pull request's title and AI status. Clicking it shows the overview.
 private struct PullRequestHeader: View {
     let pullRequest: PullRequest
+    let workspace: ReviewWorkspace
+    let aiReviews: AIReviewStore
+    @State private var isHovered = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text("\(pullRequest.reference.isDemo ? "Demo" : pullRequest.reference.repository) #\(pullRequest.number) · \(pullRequest.author)")
-                .font(.caption.weight(.semibold))
-            Text(pullRequest.title)
-                .font(.headline)
-                .lineLimit(3)
-            Label("\(pullRequest.headBranch) → \(pullRequest.baseBranch)", systemImage: "arrow.triangle.branch")
-                .font(.caption)
-                .lineLimit(1)
+        Button { workspace.showOverview() } label: {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("\(pullRequest.reference.isDemo ? "Demo" : pullRequest.reference.repository) #\(pullRequest.number) · \(pullRequest.author)")
+                    .font(.caption.weight(.semibold))
+                Text(pullRequest.title)
+                    .font(.headline)
+                    .lineLimit(3)
+                    .multilineTextAlignment(.leading)
+                Label("\(pullRequest.headBranch) → \(pullRequest.baseBranch)", systemImage: "arrow.triangle.branch")
+                    .font(.caption)
+                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    AIStatusLabel(reference: pullRequest.reference, aiReviews: aiReviews)
+                    Spacer(minLength: 4)
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                }
+                .padding(.top, 4)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(10)
+            .background(background, in: .rect(cornerRadius: 10))
+            .contentShape(.rect(cornerRadius: 10))
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .help("Show the pull request overview and AI summary")
+    }
+
+    private var background: AnyShapeStyle {
+        if workspace.showsOverview { return AnyShapeStyle(Color.accentColor.opacity(0.2)) }
+        if isHovered { return AnyShapeStyle(.fill.tertiary) }
+        return AnyShapeStyle(.clear)
+    }
+}
+
+/// "High risk · 3 findings", "AI reviewing…", or a prompt to get a summary.
+private struct AIStatusLabel: View {
+    let reference: PullRequestReference
+    let aiReviews: AIReviewStore
+
+    var body: some View {
+        switch aiReviews.activity(for: reference) {
+        case .reviewing:
+            HStack(spacing: 6) {
+                ProgressView()
+                    .controlSize(.mini)
+                Text("AI reviewing…")
+            }
+            .font(.caption)
+        case .failed:
+            Label("AI review failed", systemImage: "exclamationmark.triangle.fill")
+                .font(.caption)
+                .foregroundStyle(.red)
+        case nil:
+            if let review = aiReviews.review(for: reference) {
+                HStack(spacing: 6) {
+                    SeverityBadge(severity: review.risk, label: "\(review.risk.rawValue) risk")
+                    Text(review.findings.count == 1 ? "1 finding" : "\(review.findings.count) findings")
+                        .font(.caption)
+                }
+            } else {
+                Label("Overview & AI summary", systemImage: "sparkles")
+                    .font(.caption)
+            }
+        }
     }
 }

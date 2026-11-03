@@ -70,12 +70,13 @@ enum AIProviderKind: String, CaseIterable, Identifiable {
 
 /// The jobs AI does in Riviu. Each can use its own provider, model and instructions.
 enum AITask: String, CaseIterable, Identifiable {
-    case chat, explain
+    case review, chat, explain
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
+        case .review: "AI Review"
         case .chat: "Chat"
         case .explain: "Explain"
         }
@@ -114,11 +115,14 @@ final class AppSettings {
     var highlightsWordChanges: Bool { didSet { save(highlightsWordChanges, for: "highlightsWordChanges") } }
     var showsChatPanel: Bool { didSet { save(showsChatPanel, for: "showsChatPanel") } }
 
+    var reviewProvider: AIProviderKind { didSet { save(reviewProvider.rawValue, for: "reviewProvider") } }
     var chatProvider: AIProviderKind { didSet { save(chatProvider.rawValue, for: "chatProvider") } }
     var explainProvider: AIProviderKind { didSet { save(explainProvider.rawValue, for: "explainProvider") } }
     /// Empty means the provider's default model.
+    var reviewModel: String { didSet { save(reviewModel, for: "reviewModel") } }
     var chatModel: String { didSet { save(chatModel, for: "chatModel") } }
     var explainModel: String { didSet { save(explainModel, for: "explainModel") } }
+    var reviewInstructions: String { didSet { save(reviewInstructions, for: "reviewInstructions") } }
     var chatInstructions: String { didSet { save(chatInstructions, for: "chatInstructions") } }
     var explainInstructions: String { didSet { save(explainInstructions, for: "explainInstructions") } }
     var explanationLength: ExplanationLength { didSet { save(explanationLength.rawValue, for: "explanationLength") } }
@@ -126,6 +130,11 @@ final class AppSettings {
     var claudeCodePath: String { didSet { save(claudeCodePath, for: "claudeCodePath") } }
     var codexPath: String { didSet { save(codexPath, for: "codexPath") } }
     var cursorPath: String { didSet { save(cursorPath, for: "cursorPath") } }
+
+    var checksForReviewRequests: Bool { didSet { save(checksForReviewRequests, for: "checksForReviewRequests") } }
+    var reviewRequestCheckMinutes: Int { didSet { save(reviewRequestCheckMinutes, for: "reviewRequestCheckMinutes") } }
+    var notifiesAboutReviewRequests: Bool { didSet { save(notifiesAboutReviewRequests, for: "notifiesAboutReviewRequests") } }
+    var reviewsNewRequestsWithAI: Bool { didSet { save(reviewsNewRequestsWithAI, for: "reviewsNewRequestsWithAI") } }
 
     /// Client ID of a GitHub OAuth App, which turns on "Sign in with GitHub" in the browser.
     var gitHubClientID: String { didSet { save(gitHubClientID, for: "gitHubClientID") } }
@@ -143,16 +152,23 @@ final class AppSettings {
         contextLines = defaults.object(forKey: "contextLines") as? Int ?? 3
         highlightsWordChanges = defaults.object(forKey: "highlightsWordChanges") as? Bool ?? true
         showsChatPanel = defaults.object(forKey: "showsChatPanel") as? Bool ?? true
+        reviewProvider = AIProviderKind(rawValue: defaults.string(forKey: "reviewProvider") ?? "") ?? .claudeCode
         chatProvider = AIProviderKind(rawValue: defaults.string(forKey: "chatProvider") ?? "") ?? .claudeCode
         explainProvider = AIProviderKind(rawValue: defaults.string(forKey: "explainProvider") ?? "") ?? .claudeCode
+        reviewModel = defaults.string(forKey: "reviewModel") ?? ""
         chatModel = defaults.string(forKey: "chatModel") ?? ""
         explainModel = defaults.string(forKey: "explainModel") ?? ""
-        chatInstructions = defaults.string(forKey: "chatInstructions") ?? ReviewPrompts.defaultChatInstructions
-        explainInstructions = defaults.string(forKey: "explainInstructions") ?? ReviewPrompts.defaultExplainInstructions
+        reviewInstructions = defaults.string(forKey: "reviewInstructions") ?? ReviewPrompts.defaultInstructions(for: .review)
+        chatInstructions = defaults.string(forKey: "chatInstructions") ?? ReviewPrompts.defaultInstructions(for: .chat)
+        explainInstructions = defaults.string(forKey: "explainInstructions") ?? ReviewPrompts.defaultInstructions(for: .explain)
         explanationLength = ExplanationLength(rawValue: defaults.string(forKey: "explanationLength") ?? "") ?? .brief
         claudeCodePath = defaults.string(forKey: "claudeCodePath") ?? ""
         codexPath = defaults.string(forKey: "codexPath") ?? ""
         cursorPath = defaults.string(forKey: "cursorPath") ?? ""
+        checksForReviewRequests = defaults.object(forKey: "checksForReviewRequests") as? Bool ?? true
+        reviewRequestCheckMinutes = defaults.object(forKey: "reviewRequestCheckMinutes") as? Int ?? 5
+        notifiesAboutReviewRequests = defaults.object(forKey: "notifiesAboutReviewRequests") as? Bool ?? true
+        reviewsNewRequestsWithAI = defaults.object(forKey: "reviewsNewRequestsWithAI") as? Bool ?? true
         gitHubClientID = defaults.string(forKey: "gitHubClientID") ?? ""
     }
 
@@ -165,6 +181,7 @@ final class AppSettings {
 
     func provider(for task: AITask) -> AIProviderKind {
         switch task {
+        case .review: reviewProvider
         case .chat: chatProvider
         case .explain: explainProvider
         }
@@ -172,6 +189,7 @@ final class AppSettings {
 
     func setProvider(_ provider: AIProviderKind, for task: AITask) {
         switch task {
+        case .review: reviewProvider = provider
         case .chat: chatProvider = provider
         case .explain: explainProvider = provider
         }
@@ -179,6 +197,7 @@ final class AppSettings {
 
     func model(for task: AITask) -> String {
         switch task {
+        case .review: reviewModel
         case .chat: chatModel
         case .explain: explainModel
         }
@@ -186,6 +205,7 @@ final class AppSettings {
 
     func setModel(_ model: String, for task: AITask) {
         switch task {
+        case .review: reviewModel = model
         case .chat: chatModel = model
         case .explain: explainModel = model
         }
@@ -193,6 +213,7 @@ final class AppSettings {
 
     func instructions(for task: AITask) -> String {
         switch task {
+        case .review: reviewInstructions
         case .chat: chatInstructions
         case .explain: explainInstructions
         }
@@ -200,6 +221,7 @@ final class AppSettings {
 
     func setInstructions(_ instructions: String, for task: AITask) {
         switch task {
+        case .review: reviewInstructions = instructions
         case .chat: chatInstructions = instructions
         case .explain: explainInstructions = instructions
         }

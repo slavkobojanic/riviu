@@ -74,6 +74,17 @@ extension DiffCanvasView {
         scrollTo(y: min(max(highest, target), lowest))
     }
 
+    /// Scrolls to a line if it's off screen. Returns false if no row shows that line.
+    func revealLine(_ lineIndex: Int, on side: DiffSide) -> Bool {
+        let match = rows.firstIndex { row in
+            guard let indices = row.lineIndices else { return false }
+            return (side == .head ? indices.head : indices.base) == lineIndex
+        }
+        guard let match else { return false }
+        revealRow(match, margin: 40)
+        return true
+    }
+
     func scrollToTop() {
         guard let scrollView = enclosingScrollView else { return }
         scrollTo(y: -scrollView.contentView.contentInsets.top)

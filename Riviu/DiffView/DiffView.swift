@@ -12,6 +12,7 @@ struct DiffDisplay: Equatable {
     var lineSpacing: LineSpacing
     var findQuery: String
     var findStep: FindStep
+    var lineToReveal: LineToReveal?
 }
 
 /// Puts the AppKit `DiffCanvasView` in a scroll view and keeps it in step with the workspace and settings.
@@ -25,6 +26,7 @@ struct DiffView: NSViewRepresentable {
         var canvas: DiffCanvasView?
         var rowsVersion = -1
         var findStep = FindStep()
+        var revealedLineID: UUID?
     }
 
     func makeCoordinator() -> Coordinator {
@@ -60,6 +62,14 @@ struct DiffView: NSViewRepresentable {
         if coordinator.findStep != display.findStep {
             coordinator.findStep = display.findStep
             canvas.moveToFindMatch(forward: display.findStep.forward)
+        }
+        if let line = display.lineToReveal, line.id != coordinator.revealedLineID {
+            // Wait a moment so a newly created view has its size before scrolling.
+            Task { @MainActor in
+                if canvas.revealLine(line.lineIndex, on: line.side) {
+                    coordinator.revealedLineID = line.id
+                }
+            }
         }
     }
 

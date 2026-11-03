@@ -16,6 +16,13 @@ struct FindStep: Equatable {
     var forward = true
 }
 
+/// A line the diff view should scroll to. `id` changes on every request.
+struct LineToReveal: Equatable {
+    let id = UUID()
+    let side: DiffSide
+    let lineIndex: Int
+}
+
 /// Which match is selected (0-based, or -1) out of how many, as reported by the diff view.
 struct FindStatus: Equatable {
     var current = -1
@@ -31,6 +38,9 @@ final class ReviewWorkspace {
     /// The pull request being opened, while it loads.
     private(set) var loadingReference: PullRequestReference?
     private(set) var openErrorMessage: String?
+
+    /// True while the pull request's overview is shown instead of a file.
+    private(set) var showsOverview = false
 
     var selectedFilePath: String? {
         didSet {
@@ -53,7 +63,6 @@ final class ReviewWorkspace {
     /// Loaded (or loading) contents of the open pull request's files, by path.
     private(set) var fileContents: [String: FileContent] = [:]
 
-    private(set) var findings: [ReviewFinding]
     private(set) var comments: [ReviewComment] = []
     private(set) var viewedFileKeys: Set<String> = []
     private(set) var isSubmittingReview = false
@@ -65,18 +74,20 @@ final class ReviewWorkspace {
         }
     }
     private(set) var findStep = FindStep()
+    private(set) var lineToReveal: LineToReveal?
     var findStatus = FindStatus()
 
     @ObservationIgnored private let settings: AppSettings
     @ObservationIgnored private let account: GitHubAccount
+    @ObservationIgnored private let aiReviews: AIReviewStore
     @ObservationIgnored private var openTask: Task<Void, Never>?
     @ObservationIgnored private var expandedSegments: Set<Int> = []
     @ObservationIgnored private var syntaxByPath: [String: (base: SyntaxDocument, head: SyntaxDocument)] = [:]
 
-    init(findings: [ReviewFinding], settings: AppSettings, account: GitHubAccount) {
-        self.findings = findings
+    init(settings: AppSettings, account: GitHubAccount, aiReviews: AIReviewStore) {
         self.settings = settings
         self.account = account
+        self.aiReviews = aiReviews
     }
 
     var selectedFile: ChangedFile? {
@@ -126,18 +137,30 @@ final class ReviewWorkspace {
         fileContents = [:]
         syntaxByPath = [:]
         selectedFilePath = nil
+        // The first file loads in the background while the overview is shown.
         selectedFilePath = newPullRequest.files.first?.path
+        showsOverview = true
     }
 
     // MARK: - Navigation
+
+    func showOverview() {
+        showsOverview = true
+    }
 
     /// Selects a file only if it's in the open pull request (folders in the sidebar are ignored).
     func selectFile(at path: String?) {
         guard let path, pullRequest?.file(at: path) != nil else { return }
         selectedFilePath = path
+        showsOverview = false
     }
 
+    /// From the overview, the next file is the one already selected.
     func selectAdjacentFile(offset: Int) {
+        if showsOverview {
+            showsOverview = false
+            return
+        }
         guard let paths = pullRequest?.files.map(\.path), let current = selectedFilePath,
               let index = paths.firstIndex(of: current) else { return }
         let next = index + offset
@@ -306,19 +329,34 @@ final class ReviewWorkspace {
 
     // MARK: - Findings
 
-    /// AI findings. Only the demo pull requests have any until AI review is built.
+    /// The open pull request's AI findings.
+    var findings: [ReviewFinding] {
+        guard let reference = pullRequest?.reference else { return [] }
+        return aiReviews.review(for: reference)?.findings ?? []
+    }
+
+    /// Findings on lines that exist in the file; an AI can name a line that isn't there.
     func findings(inFileAt path: String) -> [ReviewFinding] {
-        guard pullRequest?.reference.isDemo == true else { return [] }
-        return findings.filter { $0.filePath == path }
+        let inFile = findings.filter { $0.filePath == path }
+        guard case let .loaded(diff) = fileContents[path] else { return inFile }
+        return inFile.filter { diff.lines(on: $0.side).indices.contains($0.lineIndex) }
+    }
+
+    /// Opens the file a finding is in and scrolls to it.
+    func reveal(_ finding: ReviewFinding) {
+        selectFile(at: finding.filePath)
+        lineToReveal = LineToReveal(side: finding.side, lineIndex: finding.lineIndex)
     }
 
     func dismissFinding(_ finding: ReviewFinding) {
-        findings.removeAll { $0.id == finding.id }
+        guard let reference = pullRequest?.reference else { return }
+        aiReviews.dismissFinding(finding.id, in: reference)
         rebuildRows()
     }
 
     func turnFindingIntoComment(_ finding: ReviewFinding) {
-        guard let diff = selectedFileDiff, diff.path == finding.filePath else { return }
+        guard let diff = selectedFileDiff, diff.path == finding.filePath,
+              diff.lines(on: finding.side).indices.contains(finding.lineIndex) else { return }
         let code = diff.lines(on: finding.side)[finding.lineIndex]
         dismissFinding(finding)
         startComment(on: CodeTarget(filePath: diff.path, side: finding.side, lines: finding.lineIndex...finding.lineIndex, code: code),

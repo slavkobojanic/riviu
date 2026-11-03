@@ -3,6 +3,7 @@ import SwiftUI
 /// The middle of the window: the diff of the selected file, or what's happening instead.
 struct ReviewDetail: View {
     let workspace: ReviewWorkspace
+    let aiReviews: AIReviewStore
     let display: DiffDisplay
     let settings: AppSettings
     let chats: ChatStore
@@ -18,11 +19,15 @@ struct ReviewDetail: View {
             }
         } else if let reference = workspace.loadingReference {
             ProgressView("Loading \(reference.id)…")
-        } else if workspace.pullRequest == nil {
+        } else if let pullRequest = workspace.pullRequest {
+            if workspace.showsOverview {
+                PullRequestOverview(pullRequest: pullRequest, workspace: workspace, aiReviews: aiReviews)
+            } else {
+                fileContent
+            }
+        } else {
             ContentUnavailableView("No Pull Request Open", systemImage: "arrow.triangle.pull",
                                    description: Text("Choose a pull request in the sidebar."))
-        } else {
-            fileContent
         }
     }
 

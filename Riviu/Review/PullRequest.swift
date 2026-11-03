@@ -61,11 +61,24 @@ nonisolated enum FileContent: Sendable {
 }
 
 /// An issue the AI review found, pinned to a line.
-nonisolated struct ReviewFinding: Identifiable, Sendable {
-    enum Severity: String, Sendable {
+nonisolated struct ReviewFinding: Identifiable, Sendable, Codable {
+    enum Severity: String, Sendable, Codable, Comparable {
         case high = "High"
         case medium = "Medium"
         case low = "Low"
+
+        /// High sorts first.
+        static func < (lhs: Severity, rhs: Severity) -> Bool {
+            lhs.rank < rhs.rank
+        }
+
+        private var rank: Int {
+            switch self {
+            case .high: 0
+            case .medium: 1
+            case .low: 2
+            }
+        }
     }
 
     let id: String

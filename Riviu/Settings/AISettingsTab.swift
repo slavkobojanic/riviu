@@ -97,22 +97,25 @@ private struct InstructionsEditor: View {
                 .font(.system(.callout, design: .monospaced))
                 .frame(minHeight: 110)
             HStack {
-                Text(task == .chat
-                     ? "Sent before the pull request's details and diffs."
-                     : "Sent before the code. The length setting is added at the end.")
+                Text(footnote)
                     .font(.caption)
                 Spacer()
-                Button("Restore Default") {
-                    settings.setInstructions(task == .chat ? ReviewPrompts.defaultChatInstructions : ReviewPrompts.defaultExplainInstructions,
-                                             for: task)
-                }
-                .disabled(settings.instructions(for: task) == defaultInstructions)
+                Button("Restore Default") { settings.setInstructions(defaultInstructions, for: task) }
+                    .disabled(settings.instructions(for: task) == defaultInstructions)
             }
         }
     }
 
     private var defaultInstructions: String {
-        task == .chat ? ReviewPrompts.defaultChatInstructions : ReviewPrompts.defaultExplainInstructions
+        ReviewPrompts.defaultInstructions(for: task)
+    }
+
+    private var footnote: String {
+        switch task {
+        case .review: "Sent before the diffs. The reply format Riviu needs is added at the end."
+        case .chat: "Sent before the pull request's details and diffs."
+        case .explain: "Sent before the code. The length setting is added at the end."
+        }
     }
 
     private var instructions: Binding<String> {

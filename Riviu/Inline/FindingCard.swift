@@ -33,9 +33,11 @@ struct FindingCard: View {
 
 struct SeverityBadge: View {
     let severity: ReviewFinding.Severity
+    /// Shown instead of the severity's name, like "High risk".
+    var label: String?
 
     var body: some View {
-        Text(severity.rawValue)
+        Text(label ?? severity.rawValue)
             .font(.caption.weight(.semibold))
             .padding(.horizontal, 8)
             .padding(.vertical, 3)

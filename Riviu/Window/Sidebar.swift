@@ -5,6 +5,7 @@ struct Sidebar: View {
     let workspace: ReviewWorkspace
     let inbox: PullRequestInbox
     let account: GitHubAccount
+    let aiReviews: AIReviewStore
     @State private var page = Page.pullRequests
 
     enum Page {
@@ -21,7 +22,7 @@ struct Sidebar: View {
                     page = .files
                 }
             case .files:
-                FileSidebar(workspace: workspace) { page = .pullRequests }
+                FileSidebar(workspace: workspace, aiReviews: aiReviews) { page = .pullRequests }
                     .id(workspace.pullRequest?.id) // fresh folder expansion for each pull request
             }
         }

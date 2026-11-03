@@ -7,21 +7,22 @@ struct ReviewWindow: View {
     let inbox: PullRequestInbox
     let account: GitHubAccount
     let chats: ChatStore
+    let aiReviews: AIReviewStore
     @Bindable var settings: AppSettings
     @State private var showsReviewSheet = false
 
     var body: some View {
         NavigationSplitView {
-            Sidebar(workspace: workspace, inbox: inbox, account: account)
+            Sidebar(workspace: workspace, inbox: inbox, account: account, aiReviews: aiReviews)
                 .navigationSplitViewColumnWidth(min: 260, ideal: 320, max: 480)
         } detail: {
-            ReviewDetail(workspace: workspace, display: display, settings: settings, chats: chats)
+            ReviewDetail(workspace: workspace, aiReviews: aiReviews, display: display, settings: settings, chats: chats)
                 .inspector(isPresented: $settings.showsChatPanel) {
                     ChatPanel(chats: chats, workspace: workspace)
                         .inspectorColumnWidth(min: 300, ideal: 380, max: 600)
                 }
         }
-        .navigationTitle(workspace.selectedFile?.fileName ?? workspace.pullRequest?.title ?? "Riviu")
+        .navigationTitle(title)
         .navigationSubtitle(subtitle)
         .toolbar { toolbar }
         .sheet(isPresented: $showsReviewSheet) {
@@ -32,6 +33,7 @@ struct ReviewWindow: View {
         .onChange(of: settings.diffLayout) { workspace.rebuildRows() }
         .onChange(of: settings.contextLines) { workspace.rebuildRows() }
         .onChange(of: settings.highlightsWordChanges) { workspace.rebuildRows() }
+        .onChange(of: workspace.findings.map(\.id)) { workspace.rebuildRows() }
         .onChange(of: workspace.pullRequest?.reference, initial: true) { _, reference in
             if let reference { chats.showLatestChat(about: reference) }
         }
@@ -40,12 +42,23 @@ struct ReviewWindow: View {
     private var display: DiffDisplay {
         DiffDisplay(rowsVersion: workspace.rowsVersion, syntaxVersion: workspace.syntaxVersion, layout: settings.diffLayout,
                     themeFamily: settings.themeFamily, font: settings.editorFont, lineSpacing: settings.lineSpacing,
-                    findQuery: workspace.isFindVisible ? workspace.findQuery : "", findStep: workspace.findStep)
+                    findQuery: workspace.isFindVisible ? workspace.findQuery : "", findStep: workspace.findStep,
+                    lineToReveal: workspace.lineToReveal)
+    }
+
+    private var isShowingFile: Bool {
+        workspace.selectedFile != nil && !workspace.showsOverview
+    }
+
+    private var title: String {
+        guard let pullRequest = workspace.pullRequest else { return "Riviu" }
+        if workspace.showsOverview { return "Overview" }
+        return workspace.selectedFile?.fileName ?? pullRequest.title
     }
 
     private var subtitle: String {
         guard let pullRequest = workspace.pullRequest else { return "" }
-        guard let file = workspace.selectedFile else { return pullRequest.reference.id }
+        guard let file = workspace.selectedFile, !workspace.showsOverview else { return pullRequest.reference.id }
         let location = file.directory.isEmpty ? "" : file.directory + " · "
         return "\(location)+\(file.additions) −\(file.deletions)"
     }
@@ -66,12 +79,15 @@ struct ReviewWindow: View {
                 Label("Viewed", systemImage: workspace.isSelectedFileViewed ? "checkmark.circle.fill" : "checkmark.circle")
             }
             .help("Mark this file as viewed (⇧⌘V)")
+            .disabled(!isShowingFile)
             Toggle(isOn: $workspace.expandAll) {
                 Label("Expand All", systemImage: "arrow.up.and.down")
             }
             .help("Show every unchanged line (⌥⌘E)")
+            .disabled(!isShowingFile)
             Button("Find", systemImage: "magnifyingglass") { workspace.showFind() }
                 .help("Find in file (⌘F)")
+                .disabled(!isShowingFile)
         }
         ToolbarSpacer(.fixed)
         ToolbarItemGroup {

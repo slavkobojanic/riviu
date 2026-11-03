@@ -4,6 +4,7 @@ import SwiftUI
 struct SettingsView: View {
     let settings: AppSettings
     let account: GitHubAccount
+    let watcher: ReviewRequestWatcher
 
     var body: some View {
         TabView {
@@ -17,7 +18,7 @@ struct SettingsView: View {
                 AISettingsTab(settings: settings)
             }
             Tab("GitHub", systemImage: "person.crop.circle") {
-                GitHubSettingsTab(settings: settings, account: account)
+                GitHubSettingsTab(settings: settings, account: account, watcher: watcher)
             }
         }
         .frame(width: 640, height: 640)

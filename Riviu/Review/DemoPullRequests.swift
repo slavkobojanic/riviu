@@ -39,7 +39,40 @@ nonisolated enum DemoPullRequests {
         fileDiffsByPath[path]
     }
 
-    static let findings: [ReviewFinding] = {
+    /// Example AI reviews, so the demos show findings and a summary without running an AI.
+    static let reviews: [AIReview] = all.map { pullRequest in
+        let paths = Set(pullRequest.files.map(\.path))
+        let (summary, risk) = reviewSummaries[pullRequest.number] ?? ("", .low)
+        return AIReview(pullRequest: pullRequest.reference, headSHA: pullRequest.headSHA, createdAt: .now,
+                        author: "Example review", summary: summary, risk: risk,
+                        findings: findings.filter { paths.contains($0.filePath) })
+    }
+
+    private static let reviewSummaries: [Int: (String, ReviewFinding.Severity)] = [
+        482: ("""
+        Concurrent callers now share one in-flight token refresh instead of each starting their own. The diff parser \
+        handles single-line hunks and skips the *no newline* marker, and the legacy `OldCache` is deleted.
+
+        **Look first at** `TokenStore.refreshOnce`: the in-flight task is cleared before the keychain write finishes, \
+        so callers can still double-refresh. `OldCache.shared` also still has callers, so deleting it breaks the build.
+        """, .high),
+        479: ("""
+        Pull request lists are cached with ETags, so unchanged pages cost no rate limit, and a new `ReviewPanel` \
+        component shows pending comments with Approve and Request Changes.
+
+        **Look first at** the ETag cache, which never evicts entries, and the Approve button, which is disabled until \
+        a message is typed even though GitHub doesn't need one.
+        """, .medium),
+        471: ("""
+        The webhook handler rejects events with *503* when its queue is full, review sync follows pagination, and \
+        diff-core gains tests.
+
+        **Look first at** the sync loop, which ignores GitHub's rate-limit headers, and the webhook handler, which drops \
+        events without logging them.
+        """, .medium),
+    ]
+
+    private static let findings: [ReviewFinding] = {
         let demoFiles = [DemoFiles.tokenStore, DemoFiles.diffParser, DemoFiles.oldCache, DemoFiles.client, DemoFiles.reviewPanel,
                          DemoFiles.config, DemoFiles.syncReviews, DemoFiles.webhook, DemoFiles.diffCore, DemoFiles.architecture]
         return demoFiles.flatMap(findings(in:)) + GeneratedFixture.findings
