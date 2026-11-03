@@ -2,35 +2,44 @@ import RiviuDiff
 import RiviuSyntax
 import SwiftUI
 
-/// The pull request picker and its changed files as a folder tree.
+/// The open pull request's changed files as a folder tree.
 struct FileSidebar: View {
     let workspace: ReviewWorkspace
+    let onBack: () -> Void
     @State private var expandedFolders: Set<String>
 
-    init(workspace: ReviewWorkspace) {
+    init(workspace: ReviewWorkspace, onBack: @escaping () -> Void) {
         self.workspace = workspace
-        let tree = FileTreeNode.tree(for: workspace.pullRequest.files.map(\.path))
-        _expandedFolders = State(initialValue: Set(tree.flatMap(\.folderIDs)))
+        self.onBack = onBack
+        let paths = workspace.pullRequest?.files.map(\.path) ?? []
+        _expandedFolders = State(initialValue: Set(FileTreeNode.tree(for: paths).flatMap(\.folderIDs)))
     }
 
     var body: some View {
-        List(selection: selection) {
-            Section {
-                ForEach(tree) { node in
-                    FileTreeRow(node: node, workspace: workspace, expandedFolders: $expandedFolders)
+        VStack(alignment: .leading, spacing: 0) {
+            Button("Pull Requests", systemImage: "chevron.left", action: onBack)
+                .buttonStyle(.borderless)
+                .padding(.horizontal, 14)
+                .padding(.top, 6)
+            if let pullRequest = workspace.pullRequest, workspace.loadingReference == nil {
+                PullRequestHeader(pullRequest: pullRequest)
+                List(selection: selection) {
+                    Section {
+                        ForEach(FileTreeNode.tree(for: pullRequest.files.map(\.path))) { node in
+                            FileTreeRow(node: node, workspace: workspace, expandedFolders: $expandedFolders)
+                        }
+                    } header: {
+                        ChangedFilesHeader(workspace: workspace, pullRequest: pullRequest)
+                    }
                 }
-            } header: {
-                ChangedFilesHeader(workspace: workspace)
+                .listStyle(.sidebar)
+            } else if workspace.openErrorMessage == nil {
+                ProgressView("Loading pull request…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                Spacer()
             }
         }
-        .listStyle(.sidebar)
-        .safeAreaInset(edge: .top) {
-            PullRequestPicker(workspace: workspace)
-        }
-    }
-
-    private var tree: [FileTreeNode] {
-        FileTreeNode.tree(for: workspace.pullRequest.files.map(\.path))
     }
 
     /// Clicking a folder doesn't change the selected file.
@@ -41,9 +50,9 @@ struct FileSidebar: View {
 
 private struct ChangedFilesHeader: View {
     let workspace: ReviewWorkspace
+    let pullRequest: PullRequest
 
     var body: some View {
-        let pullRequest = workspace.pullRequest
         HStack(spacing: 6) {
             Text("\(workspace.viewedFileCount) of \(pullRequest.files.count) viewed")
             Spacer()
@@ -71,7 +80,7 @@ private struct FileTreeRow: View {
             } label: {
                 Label(node.name, systemImage: "folder")
             }
-        } else if let file = workspace.pullRequest.file(at: node.id) {
+        } else if let file = workspace.pullRequest?.file(at: node.id) {
             FileRow(file: file, workspace: workspace)
                 .tag(file.path)
         }
@@ -90,7 +99,7 @@ private struct FileTreeRow: View {
 }
 
 private struct FileRow: View {
-    let file: FileDiff
+    let file: ChangedFile
     let workspace: ReviewWorkspace
 
     var body: some View {
@@ -104,7 +113,7 @@ private struct FileRow: View {
                     .font(.caption)
                     .help("\(commentCount) pending comment(s)")
             }
-            if !workspace.findings(in: file).isEmpty {
+            if !workspace.findings(inFileAt: file.path).isEmpty {
                 Image(systemName: "sparkles")
                     .font(.caption)
                     .foregroundStyle(.purple)
@@ -138,6 +147,7 @@ private struct FileRow: View {
         case .added: "A"
         case .deleted: "D"
         case .modified: "M"
+        case .renamed: "R"
         }
     }
 
@@ -146,6 +156,7 @@ private struct FileRow: View {
         case .added: "Added"
         case .deleted: "Deleted"
         case .modified: "Modified"
+        case .renamed: "Renamed from \(file.previousPath ?? "another path")"
         }
     }
 
@@ -154,36 +165,26 @@ private struct FileRow: View {
         case .added: .green
         case .deleted: .red
         case .modified: .orange
+        case .renamed: .blue
         }
     }
 }
 
-private struct PullRequestPicker: View {
-    let workspace: ReviewWorkspace
+private struct PullRequestHeader: View {
+    let pullRequest: PullRequest
 
     var body: some View {
-        let current = workspace.pullRequest
-        Menu {
-            ForEach(workspace.pullRequests) { pullRequest in
-                Button("#\(pullRequest.number) \(pullRequest.title)") {
-                    workspace.selectPullRequest(number: pullRequest.number)
-                }
-            }
-        } label: {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("#\(current.number) · \(current.author)")
-                    .font(.caption.weight(.semibold))
-                Text(current.title)
-                    .font(.headline)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-                Label(current.branch, systemImage: "arrow.triangle.branch")
-                    .font(.caption)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(alignment: .leading, spacing: 3) {
+            Text("\(pullRequest.reference.isDemo ? "Demo" : pullRequest.reference.repository) #\(pullRequest.number) · \(pullRequest.author)")
+                .font(.caption.weight(.semibold))
+            Text(pullRequest.title)
+                .font(.headline)
+                .lineLimit(3)
+            Label("\(pullRequest.headBranch) → \(pullRequest.baseBranch)", systemImage: "arrow.triangle.branch")
+                .font(.caption)
+                .lineLimit(1)
         }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
     }

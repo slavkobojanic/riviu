@@ -1,4 +1,5 @@
 import Foundation
+import RiviuSupport
 
 /// Answers by running an AI CLI (Claude Code, Codex or Cursor) as a child process.
 public struct CommandLineProvider: AIProvider {

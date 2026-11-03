@@ -10,6 +10,7 @@ public enum ChangeStatus: Sendable, Hashable {
     case modified
     case added
     case deleted
+    case renamed
 }
 
 /// A run of lines that is either identical on both sides or changed between them.

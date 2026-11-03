@@ -11,6 +11,8 @@
 		0000000000000000A0000005 /* RiviuMarkdown in Frameworks */ = {isa = PBXBuildFile; productRef = 0000000000000000A0000003 /* RiviuMarkdown */; };
 		0000000000000000A0000007 /* RiviuDiff in Frameworks */ = {isa = PBXBuildFile; productRef = 0000000000000000A0000006 /* RiviuDiff */; };
 		0000000000000000A0000009 /* RiviuAI in Frameworks */ = {isa = PBXBuildFile; productRef = 0000000000000000A0000008 /* RiviuAI */; };
+		0000000000000000A000000B /* RiviuGitHub in Frameworks */ = {isa = PBXBuildFile; productRef = 0000000000000000A000000A /* RiviuGitHub */; };
+		0000000000000000A000000D /* RiviuSupport in Frameworks */ = {isa = PBXBuildFile; productRef = 0000000000000000A000000C /* RiviuSupport */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -31,6 +33,8 @@
 			files = (
 				0000000000000000A0000004 /* RiviuSyntax in Frameworks */,
 				0000000000000000A0000005 /* RiviuMarkdown in Frameworks */,
+				0000000000000000A000000D /* RiviuSupport in Frameworks */,
+				0000000000000000A000000B /* RiviuGitHub in Frameworks */,
 				0000000000000000A0000009 /* RiviuAI in Frameworks */,
 				0000000000000000A0000007 /* RiviuDiff in Frameworks */,
 			);
@@ -74,6 +78,8 @@
 			packageProductDependencies = (
 				0000000000000000A0000002 /* RiviuSyntax */,
 				0000000000000000A0000003 /* RiviuMarkdown */,
+				0000000000000000A000000C /* RiviuSupport */,
+				0000000000000000A000000A /* RiviuGitHub */,
 				0000000000000000A0000006 /* RiviuDiff */,
 			);
 			productName = MyApp;
@@ -386,6 +392,14 @@
 		0000000000000000A0000008 /* RiviuAI */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RiviuAI;
+		};
+		0000000000000000A000000A /* RiviuGitHub */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RiviuGitHub;
+		};
+		0000000000000000A000000C /* RiviuSupport */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RiviuSupport;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

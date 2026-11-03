@@ -48,6 +48,15 @@ enum AIProviderKind: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Models to suggest in Settings. CLIs also accept any model name their account allows.
+    var suggestedModels: [String] {
+        switch self {
+        case .claudeCode: ["opus", "sonnet", "haiku"]
+        case .anthropicAPI: AnthropicAPIProvider.models
+        case .codex, .cursor: []
+        }
+    }
+
     /// The CLI behind this provider, or nil for the API.
     var commandLineTool: CommandLineTool? {
         switch self {
@@ -55,6 +64,36 @@ enum AIProviderKind: String, CaseIterable, Identifiable {
         case .codex: .codex
         case .cursor: .cursor
         case .anthropicAPI: nil
+        }
+    }
+}
+
+/// The jobs AI does in Riviu. Each can use its own provider, model and instructions.
+enum AITask: String, CaseIterable, Identifiable {
+    case chat, explain
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .chat: "Chat"
+        case .explain: "Explain"
+        }
+    }
+}
+
+enum ExplanationLength: String, CaseIterable, Identifiable {
+    case brief, standard, detailed
+
+    var id: String { rawValue }
+    var title: String { rawValue.capitalized }
+
+    /// Added to the Explain instructions.
+    var instruction: String {
+        switch self {
+        case .brief: "Keep the whole answer under 80 words."
+        case .standard: "Keep the whole answer under 200 words."
+        case .detailed: "Be thorough, but keep the whole answer under 500 words."
         }
     }
 }
@@ -75,16 +114,21 @@ final class AppSettings {
     var highlightsWordChanges: Bool { didSet { save(highlightsWordChanges, for: "highlightsWordChanges") } }
     var showsChatPanel: Bool { didSet { save(showsChatPanel, for: "showsChatPanel") } }
 
-    var aiProvider: AIProviderKind { didSet { save(aiProvider.rawValue, for: "aiProvider") } }
-    var anthropicModel: String { didSet { save(anthropicModel, for: "anthropicModel") } }
-    /// Empty means "let the CLI choose".
-    var claudeCodeModel: String { didSet { save(claudeCodeModel, for: "claudeCodeModel") } }
-    var codexModel: String { didSet { save(codexModel, for: "codexModel") } }
-    var cursorModel: String { didSet { save(cursorModel, for: "cursorModel") } }
+    var chatProvider: AIProviderKind { didSet { save(chatProvider.rawValue, for: "chatProvider") } }
+    var explainProvider: AIProviderKind { didSet { save(explainProvider.rawValue, for: "explainProvider") } }
+    /// Empty means the provider's default model.
+    var chatModel: String { didSet { save(chatModel, for: "chatModel") } }
+    var explainModel: String { didSet { save(explainModel, for: "explainModel") } }
+    var chatInstructions: String { didSet { save(chatInstructions, for: "chatInstructions") } }
+    var explainInstructions: String { didSet { save(explainInstructions, for: "explainInstructions") } }
+    var explanationLength: ExplanationLength { didSet { save(explanationLength.rawValue, for: "explanationLength") } }
     /// Empty means "find it on the PATH".
     var claudeCodePath: String { didSet { save(claudeCodePath, for: "claudeCodePath") } }
     var codexPath: String { didSet { save(codexPath, for: "codexPath") } }
     var cursorPath: String { didSet { save(cursorPath, for: "cursorPath") } }
+
+    /// Client ID of a GitHub OAuth App, which turns on "Sign in with GitHub" in the browser.
+    var gitHubClientID: String { didSet { save(gitHubClientID, for: "gitHubClientID") } }
 
     @ObservationIgnored private let defaults: UserDefaults
 
@@ -99,14 +143,17 @@ final class AppSettings {
         contextLines = defaults.object(forKey: "contextLines") as? Int ?? 3
         highlightsWordChanges = defaults.object(forKey: "highlightsWordChanges") as? Bool ?? true
         showsChatPanel = defaults.object(forKey: "showsChatPanel") as? Bool ?? true
-        aiProvider = AIProviderKind(rawValue: defaults.string(forKey: "aiProvider") ?? "") ?? .claudeCode
-        anthropicModel = defaults.string(forKey: "anthropicModel") ?? AnthropicAPIProvider.defaultModel
-        claudeCodeModel = defaults.string(forKey: "claudeCodeModel") ?? ""
-        codexModel = defaults.string(forKey: "codexModel") ?? ""
-        cursorModel = defaults.string(forKey: "cursorModel") ?? ""
+        chatProvider = AIProviderKind(rawValue: defaults.string(forKey: "chatProvider") ?? "") ?? .claudeCode
+        explainProvider = AIProviderKind(rawValue: defaults.string(forKey: "explainProvider") ?? "") ?? .claudeCode
+        chatModel = defaults.string(forKey: "chatModel") ?? ""
+        explainModel = defaults.string(forKey: "explainModel") ?? ""
+        chatInstructions = defaults.string(forKey: "chatInstructions") ?? ReviewPrompts.defaultChatInstructions
+        explainInstructions = defaults.string(forKey: "explainInstructions") ?? ReviewPrompts.defaultExplainInstructions
+        explanationLength = ExplanationLength(rawValue: defaults.string(forKey: "explanationLength") ?? "") ?? .brief
         claudeCodePath = defaults.string(forKey: "claudeCodePath") ?? ""
         codexPath = defaults.string(forKey: "codexPath") ?? ""
         cursorPath = defaults.string(forKey: "cursorPath") ?? ""
+        gitHubClientID = defaults.string(forKey: "gitHubClientID") ?? ""
     }
 
     var editorFont: NSFont {
@@ -116,11 +163,45 @@ final class AppSettings {
         return chosen ?? .monospacedSystemFont(ofSize: size, weight: .regular)
     }
 
-    func model(for tool: CommandLineTool) -> String {
-        switch tool {
-        case .claudeCode: claudeCodeModel
-        case .codex: codexModel
-        case .cursor: cursorModel
+    func provider(for task: AITask) -> AIProviderKind {
+        switch task {
+        case .chat: chatProvider
+        case .explain: explainProvider
+        }
+    }
+
+    func setProvider(_ provider: AIProviderKind, for task: AITask) {
+        switch task {
+        case .chat: chatProvider = provider
+        case .explain: explainProvider = provider
+        }
+    }
+
+    func model(for task: AITask) -> String {
+        switch task {
+        case .chat: chatModel
+        case .explain: explainModel
+        }
+    }
+
+    func setModel(_ model: String, for task: AITask) {
+        switch task {
+        case .chat: chatModel = model
+        case .explain: explainModel = model
+        }
+    }
+
+    func instructions(for task: AITask) -> String {
+        switch task {
+        case .chat: chatInstructions
+        case .explain: explainInstructions
+        }
+    }
+
+    func setInstructions(_ instructions: String, for task: AITask) {
+        switch task {
+        case .chat: chatInstructions = instructions
+        case .explain: explainInstructions = instructions
         }
     }
 
@@ -129,14 +210,6 @@ final class AppSettings {
         case .claudeCode: claudeCodePath
         case .codex: codexPath
         case .cursor: cursorPath
-        }
-    }
-
-    func setModel(_ model: String, for tool: CommandLineTool) {
-        switch tool {
-        case .claudeCode: claudeCodeModel = model
-        case .codex: codexModel = model
-        case .cursor: cursorModel = model
         }
     }
 

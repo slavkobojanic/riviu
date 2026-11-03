@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import RiviuAI
+import RiviuSupport
 
 /// Runs the real Claude Code CLI. Opt in with `RIVIU_INTEGRATION_TESTS=1 swift test`.
 struct CommandLineIntegrationTests {

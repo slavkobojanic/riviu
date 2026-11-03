@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import RiviuDiff
+import RiviuGitHub
 import RiviuSyntax
 
 /// What can appear between diff lines.
@@ -21,19 +22,22 @@ struct FindStatus: Equatable {
     var total = 0
 }
 
-/// The review the user is looking at: the selected pull request and file, the rows the diff view draws,
+/// The review the user is looking at: the open pull request and file, the rows the diff view draws,
 /// and the user's comments, viewed files and find-in-file state.
 @Observable
 final class ReviewWorkspace {
-    let pullRequests: [PullRequest]
-    private(set) var pullRequest: PullRequest
+    /// nil until a pull request is opened.
+    private(set) var pullRequest: PullRequest?
+    /// The pull request being opened, while it loads.
+    private(set) var loadingReference: PullRequestReference?
+    private(set) var openErrorMessage: String?
 
     var selectedFilePath: String? {
         didSet {
             guard selectedFilePath != oldValue else { return }
             expandedSegments = []
             rebuildRows()
-            loadSyntax(forFileAt: selectedFilePath)
+            loadContent(ofFileAt: selectedFilePath)
         }
     }
 
@@ -46,10 +50,13 @@ final class ReviewWorkspace {
     private(set) var rowsVersion = 0
     /// Changes when syntax highlighting for the selected file finishes loading.
     private(set) var syntaxVersion = 0
+    /// Loaded (or loading) contents of the open pull request's files, by path.
+    private(set) var fileContents: [String: FileContent] = [:]
 
     private(set) var findings: [ReviewFinding]
     private(set) var comments: [ReviewComment] = []
     private(set) var viewedFileKeys: Set<String> = []
+    private(set) var isSubmittingReview = false
 
     var isFindVisible = false
     var findQuery = "" {
@@ -61,51 +68,122 @@ final class ReviewWorkspace {
     var findStatus = FindStatus()
 
     @ObservationIgnored private let settings: AppSettings
+    @ObservationIgnored private let account: GitHubAccount
+    @ObservationIgnored private var openTask: Task<Void, Never>?
     @ObservationIgnored private var expandedSegments: Set<Int> = []
     @ObservationIgnored private var syntaxByPath: [String: (base: SyntaxDocument, head: SyntaxDocument)] = [:]
-    @ObservationIgnored private var syntaxBeingLoaded: Set<String> = []
 
-    init(pullRequests: [PullRequest], findings: [ReviewFinding], settings: AppSettings) {
-        self.pullRequests = pullRequests
+    init(findings: [ReviewFinding], settings: AppSettings, account: GitHubAccount) {
         self.findings = findings
         self.settings = settings
-        pullRequest = pullRequests[0]
-        selectedFilePath = pullRequest.files.first?.path
-        rebuildRows()
-        loadSyntax(forFileAt: selectedFilePath)
+        self.account = account
     }
 
-    var selectedFile: FileDiff? {
-        selectedFilePath.flatMap { pullRequest.file(at: $0) }
+    var selectedFile: ChangedFile? {
+        selectedFilePath.flatMap { pullRequest?.file(at: $0) }
+    }
+
+    var selectedFileContent: FileContent? {
+        selectedFilePath.flatMap { fileContents[$0] }
+    }
+
+    var selectedFileDiff: FileDiff? {
+        if case let .loaded(diff) = selectedFileContent { return diff }
+        return nil
+    }
+
+    // MARK: - Opening pull requests
+
+    func open(_ reference: PullRequestReference) {
+        guard reference != pullRequest?.reference, reference != loadingReference else { return }
+        openTask?.cancel()
+        loadingReference = reference
+        openErrorMessage = nil
+        let loader = account.loader
+        openTask = Task {
+            do {
+                let pullRequest = try await loader.pullRequest(reference)
+                guard !Task.isCancelled else { return }
+                show(pullRequest)
+            } catch is CancellationError {
+                return
+            } catch {
+                openErrorMessage = error.localizedDescription
+            }
+            loadingReference = nil
+        }
+    }
+
+    func retryOpening() {
+        guard let reference = loadingReference ?? pullRequest?.reference else { return }
+        loadingReference = nil
+        pullRequest = nil
+        open(reference)
+    }
+
+    private func show(_ newPullRequest: PullRequest) {
+        pullRequest = newPullRequest
+        fileContents = [:]
+        syntaxByPath = [:]
+        selectedFilePath = nil
+        selectedFilePath = newPullRequest.files.first?.path
     }
 
     // MARK: - Navigation
 
-    func selectPullRequest(number: Int) {
-        guard number != pullRequest.number, let match = pullRequests.first(where: { $0.number == number }) else { return }
-        pullRequest = match
-        selectedFilePath = match.files.first?.path
-    }
-
-    /// Selects a file only if it's in the current pull request (folders in the sidebar are ignored).
+    /// Selects a file only if it's in the open pull request (folders in the sidebar are ignored).
     func selectFile(at path: String?) {
-        guard let path, pullRequest.file(at: path) != nil else { return }
+        guard let path, pullRequest?.file(at: path) != nil else { return }
         selectedFilePath = path
     }
 
     func selectAdjacentFile(offset: Int) {
-        let paths = pullRequest.files.map(\.path)
-        guard let current = selectedFilePath, let index = paths.firstIndex(of: current) else { return }
+        guard let paths = pullRequest?.files.map(\.path), let current = selectedFilePath,
+              let index = paths.firstIndex(of: current) else { return }
         let next = index + offset
         if paths.indices.contains(next) {
             selectedFilePath = paths[next]
         }
     }
 
+    // MARK: - File contents
+
+    private func loadContent(ofFileAt path: String?) {
+        guard let path, let pullRequest, let file = pullRequest.file(at: path) else { return }
+        switch fileContents[path] {
+        case .loading, .loaded, .binary: return
+        case .failed, nil: break
+        }
+        fileContents[path] = .loading
+        let loader = account.loader
+        Task {
+            let content: FileContent
+            do {
+                content = try await loader.content(of: file, in: pullRequest)
+            } catch {
+                content = .failed(error.localizedDescription)
+            }
+            guard self.pullRequest?.reference == pullRequest.reference else { return }
+            fileContents[path] = content
+            if case let .loaded(diff) = content {
+                loadSyntax(for: diff)
+            }
+            if path == selectedFilePath {
+                rebuildRows()
+            }
+        }
+    }
+
+    func retryLoadingSelectedFile() {
+        guard let path = selectedFilePath else { return }
+        fileContents[path] = nil
+        loadContent(ofFileAt: path)
+    }
+
     // MARK: - Rows
 
     func rebuildRows() {
-        guard let file = selectedFile else {
+        guard let diff = selectedFileDiff else {
             rows = []
             rowsVersion += 1
             return
@@ -115,8 +193,8 @@ final class ReviewWorkspace {
         options.contextLines = settings.contextLines
         options.highlightsWordChanges = settings.highlightsWordChanges
         options.expandAll = expandAll
-        options.expandedSegments = expandedSegments.union(segmentsWithFindMatches(in: file))
-        rows = DiffRowBuilder.rows(for: file, options: options, attachments: attachments(for: file))
+        options.expandedSegments = expandedSegments.union(segmentsWithFindMatches(in: diff))
+        rows = DiffRowBuilder.rows(for: diff, options: options, attachments: attachments(forFileAt: diff.path))
         rowsVersion += 1
     }
 
@@ -125,11 +203,11 @@ final class ReviewWorkspace {
         rebuildRows()
     }
 
-    private func attachments(for file: FileDiff) -> [Attachment] {
-        let findingAttachments = findings(in: file).map {
+    private func attachments(forFileAt path: String) -> [Attachment] {
+        let findingAttachments = findings(inFileAt: path).map {
             Attachment(id: Self.attachmentID(forFinding: $0.id), side: $0.side, lineIndex: $0.lineIndex)
         }
-        let commentAttachments = comments(in: file).map {
+        let commentAttachments = comments(inFileAt: path).map {
             Attachment(id: Self.attachmentID(forComment: $0.id), side: $0.side, lineIndex: $0.lines.upperBound)
         }
         return findingAttachments + commentAttachments
@@ -154,16 +232,13 @@ final class ReviewWorkspace {
         path.flatMap { syntaxByPath[$0] }
     }
 
-    private func loadSyntax(forFileAt path: String?) {
-        guard let path, let file = pullRequest.file(at: path), syntaxByPath[path] == nil, !syntaxBeingLoaded.contains(path) else { return }
-        syntaxBeingLoaded.insert(path)
-        let language = SyntaxLanguage.detect(path: path)
+    private func loadSyntax(for diff: FileDiff) {
+        let language = SyntaxLanguage.detect(path: diff.path)
         Task {
-            async let base = SyntaxDocument.parse(lines: file.baseLines, language: language)
-            async let head = SyntaxDocument.parse(lines: file.headLines, language: language)
-            syntaxByPath[path] = (await base, await head)
-            syntaxBeingLoaded.remove(path)
-            if path == selectedFilePath {
+            async let base = SyntaxDocument.parse(lines: diff.baseLines, language: language)
+            async let head = SyntaxDocument.parse(lines: diff.headLines, language: language)
+            syntaxByPath[diff.path] = (await base, await head)
+            if diff.path == selectedFilePath {
                 syntaxVersion += 1
             }
         }
@@ -171,7 +246,7 @@ final class ReviewWorkspace {
 
     // MARK: - Viewed files
 
-    private func viewedKey(for path: String) -> String { "\(pullRequest.number):\(path)" }
+    private func viewedKey(for path: String) -> String { "\(pullRequest?.id ?? ""):\(path)" }
 
     func isViewed(_ path: String) -> Bool {
         viewedFileKeys.contains(viewedKey(for: path))
@@ -182,7 +257,7 @@ final class ReviewWorkspace {
     }
 
     var viewedFileCount: Int {
-        pullRequest.files.filter { isViewed($0.path) }.count
+        pullRequest?.files.filter { isViewed($0.path) }.count ?? 0
     }
 
     func toggleViewedForSelectedFile() {
@@ -231,8 +306,10 @@ final class ReviewWorkspace {
 
     // MARK: - Findings
 
-    func findings(in file: FileDiff) -> [ReviewFinding] {
-        findings.filter { $0.filePath == file.path }
+    /// AI findings. Only the demo pull requests have any until AI review is built.
+    func findings(inFileAt path: String) -> [ReviewFinding] {
+        guard pullRequest?.reference.isDemo == true else { return [] }
+        return findings.filter { $0.filePath == path }
     }
 
     func dismissFinding(_ finding: ReviewFinding) {
@@ -241,25 +318,31 @@ final class ReviewWorkspace {
     }
 
     func turnFindingIntoComment(_ finding: ReviewFinding) {
-        guard let file = pullRequest.file(at: finding.filePath) else { return }
-        let code = file.lines(on: finding.side)[finding.lineIndex]
+        guard let diff = selectedFileDiff, diff.path == finding.filePath else { return }
+        let code = diff.lines(on: finding.side)[finding.lineIndex]
         dismissFinding(finding)
-        startComment(on: CodeTarget(filePath: file.path, side: finding.side, lines: finding.lineIndex...finding.lineIndex, code: code),
+        startComment(on: CodeTarget(filePath: diff.path, side: finding.side, lines: finding.lineIndex...finding.lineIndex, code: code),
                      body: "**\(finding.title)**\n\n\(finding.body)")
     }
 
     // MARK: - Comments
 
-    func comments(in file: FileDiff) -> [ReviewComment] {
-        comments.filter { $0.pullRequestNumber == pullRequest.number && $0.filePath == file.path }
+    func comments(inFileAt path: String) -> [ReviewComment] {
+        comments.filter { $0.pullRequest == pullRequest?.reference && $0.filePath == path }
     }
 
     func commentCount(forFileAt path: String) -> Int {
-        comments.filter { $0.pullRequestNumber == pullRequest.number && $0.filePath == path && !$0.isNew }.count
+        comments(inFileAt: path).filter { !$0.isNew }.count
+    }
+
+    /// Comments written but not yet posted to GitHub.
+    var pendingComments: [ReviewComment] {
+        comments.filter { $0.pullRequest == pullRequest?.reference && $0.isPending }
     }
 
     func startComment(on target: CodeTarget, body: String = "") {
-        let comment = ReviewComment(id: UUID(), pullRequestNumber: pullRequest.number, filePath: target.filePath,
+        guard let reference = pullRequest?.reference else { return }
+        let comment = ReviewComment(id: UUID(), pullRequest: reference, filePath: target.filePath,
                                     side: target.side, lines: target.lines, code: target.code,
                                     body: body, isEditing: true, isNew: true)
         comments.append(comment)
@@ -290,6 +373,33 @@ final class ReviewWorkspace {
     func deleteComment(_ id: UUID) {
         comments.removeAll { $0.id == id }
         rebuildRows()
+    }
+
+    // MARK: - Submitting a review
+
+    var canSubmitReview: Bool {
+        pullRequest?.reference.isDemo == false && account.isSignedIn
+    }
+
+    /// Posts the review with every pending comment, then marks those comments as submitted.
+    func submitReview(event: GitHubReviewSubmission.Event, body: String) async throws {
+        guard let pullRequest, let client = account.client, !pullRequest.reference.isDemo else {
+            throw PullRequestLoader.LoadError.notSignedIn
+        }
+        let pending = pendingComments
+        let review = GitHubReviewSubmission(commitID: pullRequest.headSHA, event: event, body: body, comments: pending.map { comment in
+            // GitHub numbers lines from 1.
+            let lines = (comment.lines.lowerBound + 1)...(comment.lines.upperBound + 1)
+            return GitHubReviewSubmission.Comment(path: comment.filePath, body: comment.body,
+                                                  side: comment.side == .head ? .right : .left, lines: lines)
+        })
+
+        isSubmittingReview = true
+        defer { isSubmittingReview = false }
+        try await client.submitReview(review, repository: pullRequest.reference.repository, number: pullRequest.number)
+        for comment in pending {
+            updateComment(comment.id) { $0.isSubmitted = true }
+        }
     }
 
     private func updateComment(_ id: UUID, _ change: (inout ReviewComment) -> Void) {

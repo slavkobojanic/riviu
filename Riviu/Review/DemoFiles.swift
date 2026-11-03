@@ -15,7 +15,7 @@ nonisolated struct DemoFile {
             return ""
         case .added:
             return base
-        case .modified:
+        case .modified, .renamed:
             var text = base
             for (old, new) in edits {
                 guard let range = text.range(of: old) else {

@@ -19,7 +19,7 @@ struct ChatMessage: Identifiable, Codable {
 /// One conversation about one pull request.
 struct Chat: Identifiable, Codable {
     let id: UUID
-    let pullRequestNumber: Int
+    let pullRequest: PullRequestReference
     let pullRequestTitle: String
     var title: String
     var messages: [ChatMessage]
@@ -37,7 +37,7 @@ final class ChatStore {
 
     @ObservationIgnored private let makeProvider: () throws -> AIProvider
     @ObservationIgnored private var replyTask: Task<Void, Never>?
-    @ObservationIgnored private let fileURL = URL.applicationSupportDirectory.appending(path: "Riviu/chats.json")
+    @ObservationIgnored private let fileURL = URL.applicationSupportDirectory.appending(path: "Riviu/chat-history.json")
 
     init(makeProvider: @escaping () throws -> AIProvider) {
         self.makeProvider = makeProvider
@@ -48,14 +48,14 @@ final class ChatStore {
         chats.first { $0.id == activeChatID }
     }
 
-    func chats(forPullRequest number: Int) -> [Chat] {
-        chats.filter { $0.pullRequestNumber == number }
+    func chats(about pullRequest: PullRequestReference) -> [Chat] {
+        chats.filter { $0.pullRequest == pullRequest }
     }
 
     /// Shows the most recent chat about this pull request, or an empty one if there isn't any.
-    func showLatestChat(forPullRequest number: Int) {
-        if activeChat?.pullRequestNumber == number { return }
-        activeChatID = chats(forPullRequest: number).first?.id
+    func showLatestChat(about pullRequest: PullRequestReference) {
+        if activeChat?.pullRequest == pullRequest { return }
+        activeChatID = chats(about: pullRequest).first?.id
     }
 
     func startNewChat() {
@@ -108,11 +108,11 @@ final class ChatStore {
 
     /// Uses the active chat if it belongs to this pull request, otherwise starts one titled after the first message.
     private func activeChatID(forSending text: String, pullRequest: PullRequest) -> UUID {
-        if let chat = activeChat, chat.pullRequestNumber == pullRequest.number {
+        if let chat = activeChat, chat.pullRequest == pullRequest.reference {
             return chat.id
         }
         let firstLine = text.split(separator: "\n").first.map(String.init) ?? text
-        let chat = Chat(id: UUID(), pullRequestNumber: pullRequest.number, pullRequestTitle: pullRequest.title,
+        let chat = Chat(id: UUID(), pullRequest: pullRequest.reference, pullRequestTitle: pullRequest.title,
                         title: String(firstLine.prefix(60)), messages: [], updatedAt: .now)
         chats.insert(chat, at: 0)
         activeChatID = chat.id

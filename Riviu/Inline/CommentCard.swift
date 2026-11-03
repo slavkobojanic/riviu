@@ -13,18 +13,11 @@ struct CommentCard: View {
                     .font(.title3)
                 Text("You")
                     .font(.headline)
-                Text("Pending · \(comment.lineLabel)")
+                Text("\(comment.isSubmitted ? "Posted" : "Pending") · \(comment.lineLabel)")
                     .font(.subheadline)
                 Spacer()
-                GlassEffectContainer(spacing: 2) {
-                    HStack(spacing: 2) {
-                        Button("Edit", systemImage: "pencil") { workspace.editComment(comment.id) }
-                        Button("Delete", systemImage: "trash") { workspace.deleteComment(comment.id) }
-                    }
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(.glass)
-                    .buttonBorderShape(.circle)
-                    .controlSize(.small)
+                if !comment.isSubmitted {
+                    editButtons
                 }
             }
             StructuredText(markdown: comment.body)
@@ -33,5 +26,18 @@ struct CommentCard: View {
         .foregroundStyle(.primary)
         .padding(14)
         .glassEffect(.regular, in: .rect(cornerRadius: 16))
+    }
+
+    private var editButtons: some View {
+        GlassEffectContainer(spacing: 2) {
+            HStack(spacing: 2) {
+                Button("Edit", systemImage: "pencil") { workspace.editComment(comment.id) }
+                Button("Delete", systemImage: "trash") { workspace.deleteComment(comment.id) }
+            }
+            .labelStyle(.iconOnly)
+            .buttonStyle(.glass)
+            .buttonBorderShape(.circle)
+            .controlSize(.small)
+        }
     }
 }

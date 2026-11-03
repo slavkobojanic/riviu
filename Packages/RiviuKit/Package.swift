@@ -7,7 +7,9 @@ let package = Package(
     products: [
         .library(name: "RiviuDiff", targets: ["RiviuDiff"]),
         .library(name: "RiviuSyntax", targets: ["RiviuSyntax"]),
+        .library(name: "RiviuSupport", targets: ["RiviuSupport"]),
         .library(name: "RiviuAI", targets: ["RiviuAI"]),
+        .library(name: "RiviuGitHub", targets: ["RiviuGitHub"]),
         .library(name: "RiviuMarkdown", targets: ["RiviuMarkdown"]),
     ],
     dependencies: [
@@ -25,8 +27,11 @@ let package = Package(
     targets: [
         .target(name: "RiviuDiff"),
         .testTarget(name: "RiviuDiffTests", dependencies: ["RiviuDiff"]),
-        .target(name: "RiviuAI"),
-        .testTarget(name: "RiviuAITests", dependencies: ["RiviuAI"]),
+        .target(name: "RiviuSupport"),
+        .target(name: "RiviuAI", dependencies: ["RiviuSupport"]),
+        .target(name: "RiviuGitHub", dependencies: ["RiviuSupport"]),
+        .testTarget(name: "RiviuGitHubTests", dependencies: ["RiviuGitHub"]),
+        .testTarget(name: "RiviuAITests", dependencies: ["RiviuAI", "RiviuSupport"]),
         .target(
             name: "RiviuSyntax",
             dependencies: [

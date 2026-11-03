@@ -1,0 +1,97 @@
+import Foundation
+import RiviuDiff
+import RiviuGitHub
+
+/// Fetches pull requests and file contents, from GitHub or from the built-in demos.
+nonisolated struct PullRequestLoader: Sendable {
+    enum LoadError: LocalizedError {
+        case notSignedIn
+        case unknownDemo
+
+        var errorDescription: String? {
+            switch self {
+            case .notSignedIn: "Sign in to GitHub to open this pull request."
+            case .unknownDemo: "That demo pull request doesn't exist."
+            }
+        }
+    }
+
+    /// nil when not signed in to GitHub.
+    let client: GitHubClient?
+
+    func pullRequest(_ reference: PullRequestReference) async throws -> PullRequest {
+        if reference.isDemo {
+            guard let demo = DemoPullRequests.pullRequest(number: reference.number) else { throw LoadError.unknownDemo }
+            return demo
+        }
+        guard let client else { throw LoadError.notSignedIn }
+
+        async let details = client.pullRequest(repository: reference.repository, number: reference.number)
+        async let files = client.changedFiles(repository: reference.repository, number: reference.number)
+        let pullRequest = try await details
+        let mergeBase = try await client.mergeBase(repository: reference.repository, base: pullRequest.base.sha, head: pullRequest.head.sha)
+
+        return PullRequest(
+            reference: reference,
+            title: pullRequest.title,
+            author: pullRequest.user.login,
+            headBranch: pullRequest.head.ref,
+            baseBranch: pullRequest.base.ref,
+            summary: pullRequest.body ?? "",
+            headSHA: pullRequest.head.sha,
+            baseSHA: mergeBase,
+            webURL: pullRequest.htmlUrl,
+            files: try await files.map(changedFile)
+        )
+    }
+
+    /// Downloads both versions of a file and diffs them.
+    func content(of file: ChangedFile, in pullRequest: PullRequest) async throws -> FileContent {
+        if pullRequest.reference.isDemo {
+            guard let diff = DemoPullRequests.fileDiff(at: file.path) else { return .failed("Missing demo file.") }
+            return .loaded(diff)
+        }
+        guard let client else { throw LoadError.notSignedIn }
+        let repository = pullRequest.reference.repository
+
+        async let base = file.status == .added
+            ? Data()
+            : client.fileContents(repository: repository, path: file.previousPath ?? file.path, ref: pullRequest.baseSHA)
+        async let head = file.status == .deleted
+            ? Data()
+            : client.fileContents(repository: repository, path: file.path, ref: pullRequest.headSHA)
+        let (baseData, headData) = try await (base, head)
+
+        if isBinary(baseData) || isBinary(headData) {
+            return .binary
+        }
+        return .loaded(FileDiff(path: file.path, status: file.status,
+                                baseLines: FileDiff.lines(of: text(baseData)),
+                                headLines: FileDiff.lines(of: text(headData))))
+    }
+
+    private func changedFile(_ file: GitHubChangedFile) -> ChangedFile {
+        let status: ChangeStatus = switch file.status {
+        case "added": .added
+        case "removed": .deleted
+        case "renamed": .renamed
+        default: .modified
+        }
+        return ChangedFile(path: file.filename, previousPath: file.previousFilename, status: status,
+                           additions: file.additions, deletions: file.deletions, patch: file.patch)
+    }
+
+    /// Text files don't contain zero bytes; binary files nearly always do near the start.
+    private func isBinary(_ data: Data) -> Bool {
+        data.prefix(8000).contains(0)
+    }
+
+    /// Decodes UTF-8 with Unix line endings, dropping the final newline so the line count matches the file's.
+    private func text(_ data: Data) -> String {
+        var text = String(decoding: data, as: UTF8.self).replacingOccurrences(of: "\r\n", with: "\n")
+        if text.hasSuffix("\n") {
+            text.removeLast()
+        }
+        return text
+    }
+}

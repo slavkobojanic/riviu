@@ -15,8 +15,11 @@ struct ChatPanel: View {
             Divider()
             if showsHistory {
                 ChatHistoryList(chats: chats, workspace: workspace) { showsHistory = false }
+            } else if let pullRequest = workspace.pullRequest {
+                ChatConversation(chats: chats, workspace: workspace, pullRequest: pullRequest)
             } else {
-                ChatConversation(chats: chats, workspace: workspace)
+                ContentUnavailableView("No Pull Request Open", systemImage: "sparkles",
+                                       description: Text("Open a pull request to chat about it."))
             }
         }
     }
@@ -27,9 +30,11 @@ struct ChatPanel: View {
                 Text(showsHistory ? "Chat History" : (chats.activeChat?.title ?? "New Chat"))
                     .font(.headline)
                     .lineLimit(1)
-                Text("#\(workspace.pullRequest.number) · \(workspace.pullRequest.title)")
-                    .font(.caption)
-                    .lineLimit(1)
+                if let pullRequest = workspace.pullRequest {
+                    Text("\(pullRequest.reference.id) · \(pullRequest.title)")
+                        .font(.caption)
+                        .lineLimit(1)
+                }
             }
             Spacer()
             Toggle(isOn: $showsHistory) {
@@ -52,6 +57,8 @@ struct ChatPanel: View {
 private struct ChatConversation: View {
     let chats: ChatStore
     let workspace: ReviewWorkspace
+    let pullRequest: PullRequest
+    @Environment(AppSettings.self) private var settings
     @State private var draft = ""
     @FocusState private var isComposerFocused: Bool
 
@@ -59,7 +66,7 @@ private struct ChatConversation: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 16) {
-                    if let chat = chats.activeChat, chat.pullRequestNumber == workspace.pullRequest.number {
+                    if let chat = chats.activeChat, chat.pullRequest == pullRequest.reference {
                         ForEach(chat.messages) { message in
                             ChatMessageRow(message: message, isStreaming: chats.isReplying && message.id == chat.messages.last?.id)
                                 .id(message.id)
@@ -83,7 +90,7 @@ private struct ChatConversation: View {
 
     private var suggestions: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label("Ask about #\(workspace.pullRequest.number)", systemImage: "sparkles")
+            Label("Ask about #\(pullRequest.number)", systemImage: "sparkles")
                 .font(.headline)
             ForEach(suggestedQuestions, id: \.self) { question in
                 Button(question) { send(question) }
@@ -127,9 +134,9 @@ private struct ChatConversation: View {
     }
 
     private func send(_ text: String) {
-        let pullRequest = workspace.pullRequest
         chats.send(text, pullRequest: pullRequest,
-                   systemPrompt: ReviewPrompts.chatSystemPrompt(pullRequest: pullRequest, openFile: workspace.selectedFile))
+                   systemPrompt: ReviewPrompts.chatSystemPrompt(instructions: settings.chatInstructions, pullRequest: pullRequest,
+                                                                openFile: workspace.selectedFile))
         draft = ""
     }
 }
@@ -177,9 +184,9 @@ private struct ChatHistoryList: View {
                                    description: Text("Chats you have about a pull request show up here."))
         } else {
             List {
-                ForEach(pullRequestNumbers, id: \.self) { number in
-                    Section(sectionTitle(for: number)) {
-                        ForEach(chats.chats(forPullRequest: number)) { chat in
+                ForEach(pullRequests, id: \.self) { reference in
+                    Section(sectionTitle(for: reference)) {
+                        ForEach(chats.chats(about: reference)) { chat in
                             row(for: chat)
                         }
                     }
@@ -190,19 +197,19 @@ private struct ChatHistoryList: View {
     }
 
     /// Pull requests in the order their latest chat happened.
-    private var pullRequestNumbers: [Int] {
-        var seen = Set<Int>()
-        return chats.chats.map(\.pullRequestNumber).filter { seen.insert($0).inserted }
+    private var pullRequests: [PullRequestReference] {
+        var seen = Set<PullRequestReference>()
+        return chats.chats.map(\.pullRequest).filter { seen.insert($0).inserted }
     }
 
-    private func sectionTitle(for number: Int) -> String {
-        let title = chats.chats.first { $0.pullRequestNumber == number }?.pullRequestTitle ?? ""
-        return "#\(number) \(title)"
+    private func sectionTitle(for reference: PullRequestReference) -> String {
+        let title = chats.chats.first { $0.pullRequest == reference }?.pullRequestTitle ?? ""
+        return "\(reference.id) \(title)"
     }
 
     private func row(for chat: Chat) -> some View {
         Button {
-            workspace.selectPullRequest(number: chat.pullRequestNumber)
+            workspace.open(chat.pullRequest)
             chats.activeChatID = chat.id
             onOpen()
         } label: {

@@ -1,26 +1,68 @@
 import Foundation
 import RiviuDiff
 
-nonisolated struct PullRequest: Identifiable, Sendable {
+/// Identifies a pull request: "owner/name#123", or "demo#482" for the built-in examples.
+nonisolated struct PullRequestReference: Hashable, Codable, Sendable {
+    static let demoRepository = "demo"
+
+    let repository: String
     let number: Int
+
+    var id: String { "\(repository)#\(number)" }
+    var isDemo: Bool { repository == Self.demoRepository }
+}
+
+/// One file changed by a pull request. Its contents are loaded separately, when it's opened.
+nonisolated struct ChangedFile: Identifiable, Sendable {
+    let path: String
+    /// The old path of a renamed file.
+    let previousPath: String?
+    let status: ChangeStatus
+    let additions: Int
+    let deletions: Int
+    /// The unified diff, used to give the AI context. Missing for binary and very large files.
+    let patch: String?
+
+    var id: String { path }
+    var fileName: String { (path as NSString).lastPathComponent }
+    var directory: String { (path as NSString).deletingLastPathComponent }
+}
+
+nonisolated struct PullRequest: Identifiable, Sendable {
+    let reference: PullRequestReference
     let title: String
     let author: String
-    let branch: String
+    let headBranch: String
+    let baseBranch: String
     let summary: String
-    let files: [FileDiff]
+    /// The commit being reviewed.
+    let headSHA: String
+    /// The commit the changes are measured from.
+    let baseSHA: String
+    let webURL: URL?
+    let files: [ChangedFile]
 
-    var id: Int { number }
+    var id: String { reference.id }
+    var number: Int { reference.number }
     var additions: Int { files.reduce(0) { $0 + $1.additions } }
     var deletions: Int { files.reduce(0) { $0 + $1.deletions } }
 
-    func file(at path: String) -> FileDiff? {
+    func file(at path: String) -> ChangedFile? {
         files.first { $0.path == path }
     }
 }
 
+/// What the diff area shows for a file.
+nonisolated enum FileContent: Sendable {
+    case loading
+    case loaded(FileDiff)
+    case binary
+    case failed(String)
+}
+
 /// An issue the AI review found, pinned to a line.
 nonisolated struct ReviewFinding: Identifiable, Sendable {
-    enum Severity: String {
+    enum Severity: String, Sendable {
         case high = "High"
         case medium = "Medium"
         case low = "Low"
@@ -38,7 +80,7 @@ nonisolated struct ReviewFinding: Identifiable, Sendable {
 /// A review comment the user is writing or has written, on one or more lines.
 nonisolated struct ReviewComment: Identifiable, Sendable {
     let id: UUID
-    let pullRequestNumber: Int
+    let pullRequest: PullRequestReference
     let filePath: String
     let side: DiffSide
     let lines: ClosedRange<Int>
@@ -48,8 +90,11 @@ nonisolated struct ReviewComment: Identifiable, Sendable {
     var isEditing: Bool
     /// True until the comment is added for the first time; cancelling a new comment deletes it.
     var isNew: Bool
+    /// True once it has been posted to GitHub as part of a review.
+    var isSubmitted = false
 
     var lineLabel: String { describeLines(lines, on: side) }
+    var isPending: Bool { !isNew && !isEditing && !isSubmitted }
 }
 
 /// A span of code picked in the diff, by selecting it or hovering its gutter.

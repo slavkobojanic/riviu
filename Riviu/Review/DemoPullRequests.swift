@@ -1,10 +1,10 @@
 import Foundation
 import RiviuDiff
 
-/// Sample pull requests shown until GitHub is connected.
+/// Built-in example pull requests, for trying Riviu without signing in to GitHub.
 nonisolated enum DemoPullRequests {
     static let all: [PullRequest] = [
-        PullRequest(
+        makePullRequest(
             number: 482,
             title: "Coalesce token refreshes and tidy the diff parser",
             author: "Mira Kovač",
@@ -12,7 +12,7 @@ nonisolated enum DemoPullRequests {
             summary: "Only one token refresh runs at a time, the diff parser handles single-line hunks, and the legacy cache is removed. Adds a large generated fixture.",
             files: [DemoFiles.tokenStore, DemoFiles.diffParser, DemoFiles.oldCache].map(fileDiff) + [GeneratedFixture.fileDiff]
         ),
-        PullRequest(
+        makePullRequest(
             number: 479,
             title: "ETag caching and a review panel for the web client",
             author: "Oskar Lind",
@@ -20,7 +20,7 @@ nonisolated enum DemoPullRequests {
             summary: "Pull request lists are cached with ETags, review submission errors are surfaced, and a new ReviewPanel component is added.",
             files: [DemoFiles.client, DemoFiles.reviewPanel, DemoFiles.config].map(fileDiff)
         ),
-        PullRequest(
+        makePullRequest(
             number: 471,
             title: "Webhook backpressure, paginated sync and diff-core tests",
             author: "Jules Romero",
@@ -30,11 +30,38 @@ nonisolated enum DemoPullRequests {
         ),
     ]
 
+    static func pullRequest(number: Int) -> PullRequest? {
+        all.first { $0.number == number }
+    }
+
+    /// The full diff of a demo file, by path.
+    static func fileDiff(at path: String) -> FileDiff? {
+        fileDiffsByPath[path]
+    }
+
     static let findings: [ReviewFinding] = {
         let demoFiles = [DemoFiles.tokenStore, DemoFiles.diffParser, DemoFiles.oldCache, DemoFiles.client, DemoFiles.reviewPanel,
                          DemoFiles.config, DemoFiles.syncReviews, DemoFiles.webhook, DemoFiles.diffCore, DemoFiles.architecture]
         return demoFiles.flatMap(findings(in:)) + GeneratedFixture.findings
     }()
+
+    private static let fileDiffsByPath: [String: FileDiff] = {
+        let allDiffs = [DemoFiles.tokenStore, DemoFiles.diffParser, DemoFiles.oldCache, DemoFiles.client, DemoFiles.reviewPanel,
+                        DemoFiles.config, DemoFiles.syncReviews, DemoFiles.webhook, DemoFiles.diffCore, DemoFiles.architecture]
+            .map(fileDiff) + [GeneratedFixture.fileDiff]
+        return Dictionary(uniqueKeysWithValues: allDiffs.map { ($0.path, $0) })
+    }()
+
+    private static func makePullRequest(number: Int, title: String, author: String, branch: String, summary: String,
+                                        files: [FileDiff]) -> PullRequest {
+        let changedFiles = files.map { diff in
+            ChangedFile(path: diff.path, previousPath: nil, status: diff.status, additions: diff.additions,
+                        deletions: diff.deletions, patch: UnifiedDiffText.make(for: diff))
+        }
+        return PullRequest(reference: PullRequestReference(repository: PullRequestReference.demoRepository, number: number),
+                           title: title, author: author, headBranch: branch, baseBranch: "main", summary: summary,
+                           headSHA: "", baseSHA: "", webURL: nil, files: changedFiles)
+    }
 
     private static func fileDiff(_ file: DemoFile) -> FileDiff {
         FileDiff(path: file.path, status: file.status,

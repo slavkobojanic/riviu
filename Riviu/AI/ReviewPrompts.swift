@@ -6,15 +6,25 @@ enum ReviewPrompts {
     /// Keeps prompts comfortably inside every provider's limits (and the command-line argument limit for CLIs).
     private static let maxDiffCharacters = 150_000
 
-    static func chatSystemPrompt(pullRequest: PullRequest, openFile: FileDiff?) -> String {
+    static let defaultChatInstructions = """
+    You are a senior engineer helping someone review a pull request in Riviu, a code review app.
+    Answer questions about the change concisely and concretely. Refer to files and line numbers.
+    Use Markdown. Do not use tools or edit files; everything you need is below.
+    """
+
+    static let defaultExplainInstructions = """
+    You explain code to someone reviewing a pull request. Say what the code does and, if it changed in this \
+    pull request, what changed and why it matters. Point out anything risky. Use Markdown. Do not use tools.
+    """
+
+    /// The user's chat instructions followed by the pull request's details and diffs.
+    static func chatSystemPrompt(instructions: String, pullRequest: PullRequest, openFile: ChangedFile?) -> String {
         var lines = [
-            "You are a senior engineer helping someone review a pull request in Riviu, a code review app.",
-            "Answer questions about the change concisely and concretely. Refer to files and line numbers.",
-            "Use Markdown. Do not use tools or edit files; everything you need is below.",
+            instructions,
             "",
-            "Pull request #\(pullRequest.number): \(pullRequest.title)",
-            "Author: \(pullRequest.author) · Branch: \(pullRequest.branch)",
-            "Description: \(pullRequest.summary)",
+            "Pull request \(pullRequest.reference.id): \(pullRequest.title)",
+            "Author: \(pullRequest.author) · \(pullRequest.headBranch) → \(pullRequest.baseBranch)",
+            "Description: \(pullRequest.summary.isEmpty ? "(none)" : pullRequest.summary)",
             "",
             "Changed files:",
         ]
@@ -26,16 +36,12 @@ enum ReviewPrompts {
         return lines.joined(separator: "\n")
     }
 
-    static func explainRequest(target: CodeTarget, pullRequest: PullRequest) -> AIRequest {
-        let file = pullRequest.file(at: target.filePath)
-        let system = """
-        You explain code to someone reviewing a pull request. Be brief: a short paragraph on what the code does, \
-        then, if it changed in this pull request, a short paragraph on what changed and why it matters. \
-        Point out anything risky. Use Markdown. Do not use tools.
-        """
-        var context = "Pull request #\(pullRequest.number): \(pullRequest.title)\n\n"
-        if let file {
-            context += "Diff of \(file.path):\n\(UnifiedDiffText.make(for: file))\n\n"
+    static func explainRequest(instructions: String, length: ExplanationLength, target: CodeTarget,
+                               pullRequest: PullRequest, fileDiff: FileDiff?) -> AIRequest {
+        let system = instructions + "\n\n" + length.instruction
+        var context = "Pull request \(pullRequest.reference.id): \(pullRequest.title)\n\n"
+        if let fileDiff {
+            context += "Diff of \(fileDiff.path):\n\(UnifiedDiffText.make(for: fileDiff))\n\n"
         }
         let question = context + "Explain \(target.label) of \(target.filePath):\n```\n\(target.code)\n```"
         return AIRequest(system: system, messages: [AIMessage(role: .user, text: question)])
@@ -46,12 +52,16 @@ enum ReviewPrompts {
     }
 
     /// The open file's diff comes first so it survives if the total has to be shortened.
-    private static func diffs(for pullRequest: PullRequest, putFirst openFile: FileDiff?) -> String {
+    private static func diffs(for pullRequest: PullRequest, putFirst openFile: ChangedFile?) -> String {
         let others = pullRequest.files.filter { $0.path != openFile?.path }
         let ordered = (openFile.map { [$0] } ?? []) + others
         var result = ""
         for file in ordered {
-            let diff = UnifiedDiffText.make(for: file) + "\n\n"
+            guard let patch = file.patch else {
+                result += "(No diff available for \(file.path); it may be binary or very large.)\n"
+                continue
+            }
+            let diff = "--- a/\(file.previousPath ?? file.path)\n+++ b/\(file.path)\n\(patch)\n\n"
             if result.count + diff.count > maxDiffCharacters {
                 result += "(Diff of \(file.path) omitted for length.)\n"
             } else {

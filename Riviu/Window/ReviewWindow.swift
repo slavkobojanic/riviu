@@ -4,41 +4,36 @@ import SwiftUI
 /// The main window: changed files on the left, the diff in the middle, AI chat on the right.
 struct ReviewWindow: View {
     @Bindable var workspace: ReviewWorkspace
+    let inbox: PullRequestInbox
+    let account: GitHubAccount
     let chats: ChatStore
     @Bindable var settings: AppSettings
+    @State private var showsReviewSheet = false
 
     var body: some View {
         NavigationSplitView {
-            FileSidebar(workspace: workspace)
-                .id(workspace.pullRequest.number) // fresh folder expansion state for each pull request
-                .navigationSplitViewColumnWidth(min: 230, ideal: 280, max: 440)
+            Sidebar(workspace: workspace, inbox: inbox, account: account)
+                .navigationSplitViewColumnWidth(min: 260, ideal: 320, max: 480)
         } detail: {
-            diff
+            ReviewDetail(workspace: workspace, display: display, settings: settings, chats: chats)
                 .inspector(isPresented: $settings.showsChatPanel) {
                     ChatPanel(chats: chats, workspace: workspace)
                         .inspectorColumnWidth(min: 300, ideal: 380, max: 600)
                 }
         }
-        .navigationTitle(workspace.selectedFile?.fileName ?? "Riviu")
+        .navigationTitle(workspace.selectedFile?.fileName ?? workspace.pullRequest?.title ?? "Riviu")
         .navigationSubtitle(subtitle)
         .toolbar { toolbar }
+        .sheet(isPresented: $showsReviewSheet) {
+            ReviewSubmissionSheet(workspace: workspace)
+        }
+        .environment(settings)
         .preferredColorScheme(settings.appearance.colorScheme)
         .onChange(of: settings.diffLayout) { workspace.rebuildRows() }
         .onChange(of: settings.contextLines) { workspace.rebuildRows() }
         .onChange(of: settings.highlightsWordChanges) { workspace.rebuildRows() }
-        .onChange(of: workspace.pullRequest.number, initial: true) { _, number in
-            chats.showLatestChat(forPullRequest: number)
-        }
-    }
-
-    private var diff: some View {
-        ZStack(alignment: .topTrailing) {
-            DiffView(display: display, workspace: workspace, settings: settings, chats: chats)
-                .ignoresSafeArea(.container, edges: .top)
-            if workspace.isFindVisible {
-                FindBar(workspace: workspace)
-                    .padding(14)
-            }
+        .onChange(of: workspace.pullRequest?.reference, initial: true) { _, reference in
+            if let reference { chats.showLatestChat(about: reference) }
         }
     }
 
@@ -49,7 +44,8 @@ struct ReviewWindow: View {
     }
 
     private var subtitle: String {
-        guard let file = workspace.selectedFile else { return "" }
+        guard let pullRequest = workspace.pullRequest else { return "" }
+        guard let file = workspace.selectedFile else { return pullRequest.reference.id }
         let location = file.directory.isEmpty ? "" : file.directory + " · "
         return "\(location)+\(file.additions) −\(file.deletions)"
     }
@@ -76,6 +72,18 @@ struct ReviewWindow: View {
             .help("Show every unchanged line (⌥⌘E)")
             Button("Find", systemImage: "magnifyingglass") { workspace.showFind() }
                 .help("Find in file (⌘F)")
+        }
+        ToolbarSpacer(.fixed)
+        ToolbarItemGroup {
+            if let url = workspace.pullRequest?.webURL {
+                Link(destination: url) {
+                    Label("Open on GitHub", systemImage: "safari")
+                }
+                .help("Open this pull request on GitHub")
+            }
+            Button("Submit Review", systemImage: "paperplane") { showsReviewSheet = true }
+                .disabled(!workspace.canSubmitReview)
+                .help(workspace.canSubmitReview ? "Post your comments and verdict to GitHub" : "Open a GitHub pull request to submit a review")
         }
         ToolbarSpacer(.fixed)
         ToolbarItem {

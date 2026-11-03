@@ -3,10 +3,10 @@ import Foundation
 /// A running command whose output is read line by line.
 ///
 /// `Process` isn't Sendable, so this class owns it and only exposes thread-safe operations.
-final class ChildProcess: @unchecked Sendable {
-    struct ExitResult {
-        let status: Int32
-        let errorOutput: String
+public final class ChildProcess: @unchecked Sendable {
+    public struct ExitResult: Sendable {
+        public let status: Int32
+        public let errorOutput: String
     }
 
     private let process = Process()
@@ -15,7 +15,7 @@ final class ChildProcess: @unchecked Sendable {
     /// Standard error is read from the start: if nobody reads it, a chatty tool fills the pipe and stalls.
     private var errorOutput: Task<Data, Never>?
 
-    init(executable: URL, arguments: [String], workingDirectory: URL) {
+    public init(executable: URL, arguments: [String], workingDirectory: URL) {
         process.executableURL = executable
         process.arguments = arguments
         process.currentDirectoryURL = workingDirectory
@@ -25,21 +25,21 @@ final class ChildProcess: @unchecked Sendable {
         process.standardError = errors
     }
 
-    func start() throws {
+    public func start() throws {
         try FileManager.default.createDirectory(at: process.currentDirectoryURL!, withIntermediateDirectories: true)
         try process.run()
         let errorHandle = errors.fileHandleForReading
         errorOutput = Task.detached { errorHandle.readDataToEndOfFile() }
     }
 
-    func stop() {
+    public func stop() {
         if process.isRunning {
             process.terminate()
         }
     }
 
     /// Standard output split into lines, including empty ones (they matter in Markdown).
-    func outputLines() -> AsyncThrowingStream<String, Error> {
+    public func outputLines() -> AsyncThrowingStream<String, Error> {
         let handle = output.fileHandleForReading
         return AsyncThrowingStream { continuation in
             let task = Task {
@@ -65,10 +65,24 @@ final class ChildProcess: @unchecked Sendable {
         }
     }
 
-    func waitForExit() async -> ExitResult {
+    public func waitForExit() async -> ExitResult {
         let errorData = await errorOutput?.value ?? Data()
         let process = self.process
         await Task.detached { process.waitUntilExit() }.value
         return ExitResult(status: process.terminationStatus, errorOutput: String(decoding: errorData, as: UTF8.self))
+    }
+}
+
+extension ChildProcess {
+    /// Runs a command to completion and returns its standard output.
+    public static func output(of executable: URL, arguments: [String]) async throws -> (status: Int32, output: String, errorOutput: String) {
+        let child = ChildProcess(executable: executable, arguments: arguments, workingDirectory: FileManager.default.temporaryDirectory)
+        try child.start()
+        var lines: [String] = []
+        for try await line in child.outputLines() {
+            lines.append(line)
+        }
+        let result = await child.waitForExit()
+        return (result.status, lines.joined(separator: "\n"), result.errorOutput)
     }
 }

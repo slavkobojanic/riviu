@@ -81,14 +81,18 @@ struct DiffView: NSViewRepresentable {
         }
 
         canvas.makeExplainPopover = { [weak canvas] target in
-            let request = ReviewPrompts.explainRequest(target: target, pullRequest: workspace.pullRequest)
-            let popover = ExplainPopover(target: target, request: request, makeProvider: { try AISetup.makeProvider(settings: settings) }) {
+            guard let pullRequest = workspace.pullRequest else { return NSViewController() }
+            let popover = ExplainPopover(target: target, pullRequest: pullRequest, fileDiff: workspace.selectedFileDiff,
+                                         settings: settings) {
                 canvas?.closePopover()
                 settings.showsChatPanel = true
-                chats.send(ReviewPrompts.continueInChatMessage(target: target), pullRequest: workspace.pullRequest,
-                           systemPrompt: ReviewPrompts.chatSystemPrompt(pullRequest: workspace.pullRequest, openFile: workspace.selectedFile))
+                let systemPrompt = ReviewPrompts.chatSystemPrompt(instructions: settings.chatInstructions, pullRequest: pullRequest,
+                                                                  openFile: workspace.selectedFile)
+                chats.send(ReviewPrompts.continueInChatMessage(target: target), pullRequest: pullRequest, systemPrompt: systemPrompt)
             }
-            return NSHostingController(rootView: popover)
+            let controller = NSHostingController(rootView: popover)
+            controller.sizingOptions = [.preferredContentSize] // the popover grows as the answer streams in
+            return controller
         }
     }
 }
