@@ -2,12 +2,11 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- Sparkle: where updates are announced, and the key that signs them. -->
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
 	<key>SUFeedURL</key>
 	<string>https://github.com/slavkobojanic/riviu/releases/latest/download/appcast.xml</string>
 	<key>SUPublicEDKey</key>
-	<string>SET_BY_scripts/setup-release.sh</string>
-	<key>SUEnableAutomaticChecks</key>
-	<true/>
+	<string>zKxVzq2WY+B0v1ApaRaSXTtIUdDEEjfathV9x8aMqyA=</string>
 </dict>
 </plist>
