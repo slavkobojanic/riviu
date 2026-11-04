@@ -12,6 +12,7 @@ struct RiviuApp: App {
     @State private var rules: ReviewRuleStore
     @State private var watcher: ReviewRequestWatcher
     private let notifications = ReviewRequestNotifications()
+    private let updates = Updates()
 
     init() {
         let settings = AppSettings()
@@ -54,6 +55,7 @@ struct RiviuApp: App {
         .defaultSize(width: 1500, height: 920)
         .commands {
             // Show Toolbar, Customize Toolbar… and Show Sidebar in the View menu.
+            UpdateCommands(updates: updates)
             ToolbarCommands()
             SidebarCommands()
             ReviewCommands(tabs: tabs, watcher: watcher, settings: settings)

@@ -1,0 +1,62 @@
+# Every push to main builds a DMG. Once the signing secrets are set (scripts/setup-release.sh), it's signed,
+# notarized and published as a GitHub release, with the appcast.xml that tells Sparkle about it.
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# One release at a time, in order.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      VERSION: 1.0.${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use the newest Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Test RiviuKit
+        run: swift test --package-path Packages/RiviuKit
+
+      - name: Build the DMG
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
+          REPOSITORY: ${{ github.repository }}
+          RELEASE_NOTES: ${{ github.event.head_commit.message }}
+          DEVELOPER_ID_P12_BASE64: ${{ secrets.DEVELOPER_ID_P12_BASE64 }}
+          DEVELOPER_ID_P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: scripts/release.sh
+
+      - name: Publish the release
+        if: env.SIGNED == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NOTES: ${{ github.event.head_commit.message }}
+        run: |
+          gh release create "v$VERSION" build/Riviu.dmg build/appcast.xml \
+            --title "Riviu $VERSION" --notes "$NOTES" --target "$GITHUB_SHA"
+
+      - name: Keep the unsigned DMG
+        if: env.SIGNED != '1'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Riviu-${{ env.VERSION }}-unsigned
+          path: build/Riviu.dmg
