@@ -50,8 +50,15 @@ enum ReviewPrompts {
     }
 
     /// Asks for a summary and line-level findings, as JSON that `ReviewReport.parse` reads.
-    static func reviewRequest(instructions: String, pullRequest: PullRequest) -> AIRequest {
-        let system = instructions + "\n\n" + ReviewReport.formatInstructions
+    static func reviewRequest(instructions: String, pullRequest: PullRequest, guidelines: [RepositoryGuideline] = []) -> AIRequest {
+        var system = instructions
+        if !guidelines.isEmpty {
+            system += "\n\nThe repository has its own guidelines. Follow them, and flag code that breaks them:"
+            for guideline in guidelines {
+                system += "\n\n--- \(guideline.path) ---\n\(guideline.text)"
+            }
+        }
+        system += "\n\n" + ReviewReport.formatInstructions
         let question = [
             "Review pull request \(pullRequest.reference.id): \(pullRequest.title)",
             "Author: \(pullRequest.author) · \(pullRequest.headBranch) → \(pullRequest.baseBranch)",

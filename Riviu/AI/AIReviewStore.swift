@@ -14,6 +14,8 @@ nonisolated struct AIReview: Codable, Sendable {
     let summary: String
     let risk: ReviewFinding.Severity
     var findings: [ReviewFinding]
+    /// The repository's guideline files the review followed, like "CLAUDE.md".
+    var guidelineFiles: [String]?
 }
 
 /// AI reviews, saved to disk so a review run in the background is ready when its pull request is opened.
@@ -31,10 +33,12 @@ final class AIReviewStore {
     private(set) var activities: [PullRequestReference: Activity] = [:]
 
     @ObservationIgnored private let settings: AppSettings
+    @ObservationIgnored private let account: GitHubAccount
     @ObservationIgnored private let fileURL = URL.applicationSupportDirectory.appending(path: "Riviu/ai-reviews.json")
 
-    init(settings: AppSettings, demoReviews: [AIReview]) {
+    init(settings: AppSettings, account: GitHubAccount, demoReviews: [AIReview]) {
         self.settings = settings
+        self.account = account
         load()
         for review in demoReviews {
             reviews[review.pullRequest] = review
@@ -87,9 +91,13 @@ final class AIReviewStore {
         activities[reference] = .reviewing(author: author)
         do {
             let provider = try AISetup.makeProvider(for: .review, settings: settings)
-            let request = ReviewPrompts.reviewRequest(instructions: settings.reviewInstructions, pullRequest: pullRequest)
+            let guidelines = await account.loader.repositoryGuidelines(for: pullRequest)
+            let request = ReviewPrompts.reviewRequest(instructions: settings.reviewInstructions, pullRequest: pullRequest,
+                                                      guidelines: guidelines)
             let report = try ReviewReport.parse(try await provider.reply(to: request))
-            reviews[reference] = AIReview(pullRequest: pullRequest, report: report, author: author)
+            var review = AIReview(pullRequest: pullRequest, report: report, author: author)
+            review.guidelineFiles = guidelines.map(\.path)
+            reviews[reference] = review
             activities[reference] = nil
             save()
         } catch {

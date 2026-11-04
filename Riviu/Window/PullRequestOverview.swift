@@ -107,6 +107,11 @@ private struct AISummaryCard: View {
         HStack(spacing: 12) {
             Text("\(review.author) · \(review.createdAt, format: .relative(presentation: .named))")
                 .font(.caption)
+            if let files = review.guidelineFiles, !files.isEmpty {
+                Label("Followed \(files.formatted(.list(type: .and)))", systemImage: "doc.text.magnifyingglass")
+                    .font(.caption)
+                    .help("The review followed the repository's own instructions for AI tools")
+            }
             if review.headSHA != pullRequest.headSHA {
                 Label("New commits since this review", systemImage: "arrow.triangle.2.circlepath")
                     .font(.caption)

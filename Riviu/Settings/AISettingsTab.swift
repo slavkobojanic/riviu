@@ -112,7 +112,7 @@ private struct InstructionsEditor: View {
 
     private var footnote: String {
         switch task {
-        case .review: "Sent before the diffs. The reply format Riviu needs is added at the end."
+        case .review: "Sent before the diffs, followed by the repository's CLAUDE.md, AGENTS.md or Copilot instructions if it has them. The reply format Riviu needs is added at the end."
         case .chat: "Sent before the pull request's details and diffs."
         case .explain: "Sent before the code. The length setting is added at the end."
         }

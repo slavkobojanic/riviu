@@ -2,6 +2,16 @@ import Foundation
 import RiviuDiff
 import RiviuGitHub
 
+/// A file in the repository that tells AI tools how to work on it, like CLAUDE.md.
+nonisolated struct RepositoryGuideline: Sendable {
+    static let paths = ["CLAUDE.md", "AGENTS.md", ".github/copilot-instructions.md", ".cursorrules"]
+    /// Each file is cut to this length so a long one can't crowd out the diff.
+    static let maxCharacters = 8_000
+
+    let path: String
+    let text: String
+}
+
 /// Fetches pull requests and file contents, from GitHub or from the built-in demos.
 nonisolated struct PullRequestLoader: Sendable {
     enum LoadError: LocalizedError {
@@ -68,6 +78,21 @@ nonisolated struct PullRequestLoader: Sendable {
         return .loaded(FileDiff(path: file.path, status: file.status,
                                 baseLines: FileDiff.lines(of: text(baseData)),
                                 headLines: FileDiff.lines(of: text(headData))))
+    }
+
+    /// The repository's instructions for AI tools, at the reviewed commit. Missing files are skipped.
+    func repositoryGuidelines(for pullRequest: PullRequest) async -> [RepositoryGuideline] {
+        guard let client, !pullRequest.reference.isDemo else { return [] }
+        var guidelines: [RepositoryGuideline] = []
+        for path in RepositoryGuideline.paths {
+            guard let data = try? await client.fileContents(repository: pullRequest.reference.repository, path: path,
+                                                            ref: pullRequest.headSHA) else { continue }
+            let text = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !text.isEmpty {
+                guidelines.append(RepositoryGuideline(path: path, text: String(text.prefix(RepositoryGuideline.maxCharacters))))
+            }
+        }
+        return guidelines
     }
 
     private func changedFile(_ file: GitHubChangedFile) -> ChangedFile {
