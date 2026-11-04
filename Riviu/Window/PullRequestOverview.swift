@@ -24,10 +24,10 @@ struct PullRequestOverview: View {
                 if let sinceLastReview = workspace.sinceLastReview {
                     SinceLastReviewBanner(workspace: workspace, sinceLastReview: sinceLastReview)
                 }
+                AISummaryCard(pullRequest: pullRequest, aiReviews: aiReviews)
                 if !workspace.checkRuns.isEmpty {
                     ChecksSection(workspace: workspace)
                 }
-                AISummaryCard(pullRequest: pullRequest, aiReviews: aiReviews)
                 TourSection(pullRequest: pullRequest, workspace: workspace, aiReviews: aiReviews)
                 if let review = currentReview {
                     if let specCheck = review.specCheck {
@@ -53,6 +53,10 @@ struct PullRequestOverview: View {
             .padding(.vertical, 28)
             .frame(maxWidth: .infinity)
         }
+        #if DEBUG
+        // `-debugOverviewAtEnd YES` opens the overview scrolled to the description, for screenshots.
+        .defaultScrollAnchor(UserDefaults.standard.bool(forKey: "debugOverviewAtEnd") ? .bottom : .top)
+        #endif
     }
 
     /// The finished review, hidden while a new one is running.

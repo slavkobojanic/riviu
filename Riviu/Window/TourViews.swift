@@ -8,6 +8,9 @@ struct TourSection: View {
     let pullRequest: PullRequest
     let workspace: ReviewWorkspace
     let aiReviews: AIReviewStore
+    /// The stops start as a stack of cards, like grouped notifications; pressing it lays them all out.
+    @State private var isExpanded = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -16,16 +19,20 @@ struct TourSection: View {
                     .font(.title3.weight(.semibold))
                 Spacer()
                 if let tour = workspace.tour {
-                    Text("\(tour.stops.count) \(tour.stops.count == 1 ? "stop" : "stops")")
-                        .font(.caption)
+                    if isExpanded && tour.stops.count > 1 {
+                        Button("Show Less") { setExpanded(false) }
+                            .buttonStyle(.borderless)
+                    } else {
+                        Text("\(tour.stops.count) \(tour.stops.count == 1 ? "stop" : "stops")")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                     Button("Start Tour", systemImage: "play.fill") { workspace.startTour() }
                         .buttonStyle(.bordered)
                 }
             }
             if let tour = workspace.tour {
-                ForEach(Array(tour.stops.enumerated()), id: \.offset) { index, stop in
-                    StopRow(number: index + 1, stop: stop) { workspace.startTour(at: index) }
-                }
+                stops(of: tour)
             } else {
                 switch aiReviews.tourActivities[pullRequest.reference] {
                 case .reviewing:
@@ -45,6 +52,37 @@ struct TourSection: View {
         }
     }
 
+    /// All the stops when expanded. Otherwise the first one, with the edges of the next two peeking out below it.
+    private func stops(of tour: ReviewTour) -> some View {
+        let isStacked = !isExpanded && tour.stops.count > 1
+        return VStack(spacing: isStacked ? 0 : 8) {
+            ForEach(Array(tour.stops.enumerated()), id: \.offset) { index, stop in
+                let depth = isStacked ? index : 0
+                StopRow(number: index + 1, stop: stop, isBehind: depth > 0) {
+                    if isStacked {
+                        setExpanded(true)
+                    } else {
+                        workspace.startTour(at: index)
+                    }
+                }
+                // A card behind the first shows only its bottom edge, a little narrower each time.
+                .frame(height: depth == 0 ? nil : (depth <= 2 ? 7 : 0), alignment: .bottom)
+                .clipped()
+                .padding(.horizontal, CGFloat(min(depth, 2)) * 10)
+                .opacity(depth > 2 ? 0 : 1)
+                .zIndex(Double(-index))
+                .allowsHitTesting(depth == 0)
+            }
+        }
+        .help(isStacked ? "Show all \(tour.stops.count) stops" : "")
+    }
+
+    private func setExpanded(_ expanded: Bool) {
+        withAnimation(reduceMotion ? nil : .smooth(duration: 0.35)) {
+            isExpanded = expanded
+        }
+    }
+
     private func generateButton(title: String) -> some View {
         Button(title, systemImage: "map") {
             Task { await aiReviews.generateTour(for: pullRequest) }
@@ -56,11 +94,13 @@ struct TourSection: View {
 private struct StopRow: View {
     let number: Int
     let stop: TourStop
-    let start: () -> Void
+    /// Tucked behind another card in the stack: only its edge shows.
+    var isBehind = false
+    let action: () -> Void
     @State private var isHovered = false
 
     var body: some View {
-        Button(action: start) {
+        Button(action: action) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Text("\(number)")
                     .font(.headline.monospacedDigit())
@@ -78,14 +118,14 @@ private struct StopRow: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
+            .opacity(isBehind ? 0 : 1)
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.fill.opacity(isHovered ? 0.9 : 0.5), in: .rect(cornerRadius: 12))
+            .background(.fill.opacity(isBehind ? 0.35 : (isHovered ? 0.9 : 0.5)), in: .rect(cornerRadius: 12))
             .contentShape(.rect(cornerRadius: 12))
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
-        .help("Start the tour here")
     }
 }
 

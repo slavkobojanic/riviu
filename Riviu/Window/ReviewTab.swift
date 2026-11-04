@@ -1,3 +1,5 @@
+import RiviuGitHub
+import RiviuMarkdown
 import SwiftUI
 
 /// One tab: a review window with its own workspace. It remembers its pull request, so tabs come back after a relaunch.
@@ -34,6 +36,8 @@ struct ReviewTab: View {
             }
         }
         .environment(tabs)
+        // Images in descriptions and comments, which in private repositories need the token.
+        .textual.imageAttachmentLoader(GitHubImageLoader(token: account.client?.token))
         .onAppear {
             tabs.remember(openWindow)
             // Picked once: SwiftUI can make this view several times, but onAppear only runs when it's shown.
