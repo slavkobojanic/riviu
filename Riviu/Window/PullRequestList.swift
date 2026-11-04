@@ -159,13 +159,18 @@ private struct PullRequestRow: View {
             .lineLimit(1)
             AIReviewStatusLabel(reference: reference, aiReviews: aiReviews)
             if !summary.labels.isEmpty {
-                HStack(spacing: 4) {
+                // A coloured dot and the name, like Finder's tags.
+                HStack(spacing: 10) {
                     ForEach(summary.labels.prefix(3), id: \.name) { label in
-                        Text(label.name)
-                            .font(.caption2.weight(.medium))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 1)
-                            .background(Color(hex: label.color).opacity(0.25), in: .capsule)
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(Color(hex: label.color))
+                                .frame(width: 7, height: 7)
+                            Text(label.name)
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                     }
                 }
             }

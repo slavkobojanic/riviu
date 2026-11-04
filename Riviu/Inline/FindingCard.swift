@@ -16,7 +16,7 @@ struct FindingCard: View {
                 Text(finding.title)
                     .font(.headline)
                 Spacer()
-                SeverityBadge(severity: finding.severity)
+                SeverityLabel(severity: finding.severity)
             }
             InlineText(markdown: finding.body)
                 .font(.callout)
@@ -103,17 +103,29 @@ private struct SuggestedFix: View {
     }
 }
 
-struct SeverityBadge: View {
+/// A severity as a coloured symbol and its name, like the system's status labels. Each severity has its own
+/// symbol, so it doesn't rely on colour alone.
+struct SeverityLabel: View {
     let severity: ReviewFinding.Severity
     /// Shown instead of the severity's name, like "High risk".
     var label: String?
 
     var body: some View {
-        Text(label ?? severity.rawValue)
-            .font(.caption.weight(.semibold))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background(color.opacity(0.22), in: .capsule)
+        Label {
+            Text(label ?? severity.rawValue)
+        } icon: {
+            Image(systemName: symbol)
+                .foregroundStyle(color)
+        }
+        .font(.caption.weight(.semibold))
+    }
+
+    private var symbol: String {
+        switch severity {
+        case .high: "exclamationmark.octagon.fill"
+        case .medium: "exclamationmark.triangle.fill"
+        case .low: "info.circle.fill"
+        }
     }
 
     private var color: Color {

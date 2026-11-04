@@ -22,7 +22,7 @@ struct AIReviewStatusLabel: View {
             case nil:
                 if let review = aiReviews.review(for: reference) {
                     HStack(spacing: 6) {
-                        SeverityBadge(severity: review.risk, label: "\(review.risk.rawValue) risk")
+                        SeverityLabel(severity: review.risk, label: "\(review.risk.rawValue) risk")
                         Text(review.findings.count == 1 ? "1 finding" : "\(review.findings.count) findings")
                     }
                 }

@@ -237,10 +237,8 @@ private struct ExcerptView: View {
                     .truncationMode(.head)
                 if excerpt.isChanged {
                     Text("Changed")
-                        .font(.caption2.weight(.semibold))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(.green.opacity(0.2), in: .capsule)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
                 }
                 Spacer()
                 if workspace.pullRequest?.file(at: excerpt.path) != nil {

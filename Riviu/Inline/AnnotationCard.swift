@@ -21,9 +21,7 @@ struct AnnotationCard: View {
             Spacer(minLength: 0)
             Text("CI")
                 .font(.caption.weight(.semibold))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(color.opacity(0.22), in: .capsule)
+                .foregroundStyle(.secondary)
         }
         .foregroundStyle(.primary)
         .padding(12)

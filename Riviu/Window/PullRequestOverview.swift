@@ -147,7 +147,7 @@ private struct AISummaryCard: View {
                     .symbolRenderingMode(.multicolor)
                 Spacer()
                 if let review, aiReviews.activity(for: pullRequest.reference) == nil {
-                    SeverityBadge(severity: review.risk, label: "\(review.risk.rawValue) risk")
+                    SeverityLabel(severity: review.risk, label: "\(review.risk.rawValue) risk")
                 }
             }
             content
@@ -263,7 +263,7 @@ private struct FindingRow: View {
     var body: some View {
         Button(action: open) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                SeverityBadge(severity: finding.severity)
+                SeverityLabel(severity: finding.severity)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(finding.title)
                         .font(.headline)
