@@ -159,9 +159,17 @@ private struct FileRow: View {
                     .foregroundStyle(.purple)
                     .help("AI findings")
             }
-            Text(lineCounts)
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.secondary)
+            HStack(spacing: 4) {
+                if file.additions > 0 {
+                    Text("+\(file.additions)")
+                        .foregroundStyle(.statusGreen.opacity(Self.strength(of: file.additions)))
+                }
+                if file.deletions > 0 {
+                    Text("−\(file.deletions)")
+                        .foregroundStyle(.statusRed.opacity(Self.strength(of: file.deletions)))
+                }
+            }
+            .font(.caption.monospacedDigit())
             if workspace.isChangedSinceViewed(file.path) {
                 Image(systemName: "arrow.triangle.2.circlepath")
                     .foregroundStyle(.statusOrange)
@@ -189,12 +197,12 @@ private struct FileRow: View {
         }
     }
 
-    /// Like "+12 −3", leaving out a side with no lines.
-    private var lineCounts: String {
-        var parts: [String] = []
-        if file.additions > 0 { parts.append("+\(file.additions)") }
-        if file.deletions > 0 { parts.append("−\(file.deletions)") }
-        return parts.joined(separator: " ")
+    /// How strongly to color a line count: faint for a few lines, full color from about 300 lines.
+    /// It grows with the logarithm, so 10 lines already looks different from 1, and 300 from 100.
+    private static func strength(of lineCount: Int) -> Double {
+        let fullColorAt = 300.0
+        let fraction = log10(Double(lineCount) + 1) / log10(fullColorAt + 1)
+        return 0.35 + 0.65 * min(fraction, 1)
     }
 
     private var statusLetter: String {
