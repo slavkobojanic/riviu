@@ -30,6 +30,18 @@ jobs:
           sudo xcode-select -s /Applications/Xcode.app
           xcodebuild -version
 
+      # The tree-sitter grammars take ~15 minutes to compile from scratch, so keep the build folders between runs.
+      - name: Restore build caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            Packages/RiviuKit/.build
+            build/DerivedData
+          key: build-xcode27-${{ hashFiles('**/Package.resolved') }}-${{ github.sha }}
+          restore-keys: |
+            build-xcode27-${{ hashFiles('**/Package.resolved') }}-
+            build-xcode27-
+
       - name: Test RiviuKit
         run: swift test --package-path Packages/RiviuKit
 
