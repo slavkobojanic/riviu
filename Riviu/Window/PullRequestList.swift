@@ -60,6 +60,8 @@ struct PullRequestList: View {
                 .textFieldStyle(.roundedBorder)
                 .onSubmit { inbox.query.text = searchText }
         }
+        // Menus and segments stretch to fill their frame instead of sitting centered in it.
+        .buttonSizing(.flexible)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
     }
