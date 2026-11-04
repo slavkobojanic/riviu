@@ -219,12 +219,16 @@ private struct IndexStatus<Content: View>: View {
     }
 }
 
-/// A few numbered lines of code, with this pull request's changes tinted.
+/// A few numbered lines of code, with this pull request's changes tinted and marked with a bar.
+/// Long lines scroll sideways instead of being cut off.
 private struct ExcerptView: View {
     let title: String
     let excerpt: CodeExcerpt
     let workspace: ReviewWorkspace
     let close: () -> Void
+
+    /// The width of the code box, so short excerpts still tint the whole row.
+    @State private var visibleWidth: CGFloat = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -249,25 +253,54 @@ private struct ExcerptView: View {
                     .controlSize(.small)
                 }
             }
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(excerpt.lines.enumerated()), id: \.offset) { offset, line in
-                    let number = excerpt.firstLine + offset
-                    HStack(spacing: 8) {
-                        Text("\(number + 1)")
-                            .frame(width: 36, alignment: .trailing)
-                            .foregroundStyle(.secondary)
-                        Text(line.isEmpty ? " " : line)
-                            .fontWeight(number == excerpt.focusLine ? .semibold : .regular)
-                            .lineLimit(1)
+            ScrollView(.horizontal) {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(excerpt.lines.enumerated()), id: \.offset) { offset, line in
+                        codeLine(line, number: excerpt.firstLine + offset)
                     }
-                    .padding(.vertical, 1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(excerpt.changedLines.contains(number) ? Color.green.opacity(0.14) : .clear)
                 }
             }
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { visibleWidth = $0 }
             .font(.system(.caption, design: .monospaced))
             .padding(6)
             .background(.background.opacity(0.6), in: .rect(cornerRadius: 8))
         }
+    }
+
+    /// One line: a chevron on the call site, the line number, and the code.
+    /// Changed lines have a green bar at the start as well as the tint, so they don't rely on color alone.
+    private func codeLine(_ line: String, number: Int) -> some View {
+        let isChanged = excerpt.changedLines.contains(number)
+        let isFocus = number == excerpt.focusLine
+        return HStack(spacing: 4) {
+            Image(systemName: "chevron.right")
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(Color.accentColor)
+                .opacity(isFocus ? 1 : 0)
+                .frame(width: 10)
+                .accessibilityHidden(true)
+            Text("\(number + 1)")
+                .frame(width: 32, alignment: .trailing)
+                .foregroundStyle(.secondary)
+            Text(line.isEmpty ? " " : line)
+                .fontWeight(isFocus ? .semibold : .regular)
+                .fixedSize()
+                .padding(.leading, 4)
+        }
+        .padding(.vertical, 1)
+        .padding(.trailing, 6)
+        // At least as wide as the box, and as wide as the longest line, so every row's tint lines up.
+        .frame(minWidth: visibleWidth, maxWidth: .infinity, alignment: .leading)
+        .background(isChanged ? Color.green.opacity(0.14) : .clear)
+        .overlay(alignment: .leading) {
+            if isChanged {
+                Rectangle()
+                    .fill(.green)
+                    .frame(width: 2)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityValue([isFocus ? "Call site" : nil, isChanged ? "Changed in this pull request" : nil]
+            .compactMap { $0 }.joined(separator: ", "))
     }
 }

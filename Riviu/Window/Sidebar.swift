@@ -7,34 +7,17 @@ struct Sidebar: View {
     let account: GitHubAccount
     let aiReviews: AIReviewStore
     let watcher: ReviewRequestWatcher
-    @State private var page: Page
-
-    enum Page {
-        case pullRequests
-        case files
-    }
-
-    /// Reopening the window shows the open pull request's files.
-    init(workspace: ReviewWorkspace, inbox: PullRequestInbox, account: GitHubAccount, aiReviews: AIReviewStore,
-         watcher: ReviewRequestWatcher) {
-        self.workspace = workspace
-        self.inbox = inbox
-        self.account = account
-        self.aiReviews = aiReviews
-        self.watcher = watcher
-        _page = State(initialValue: workspace.pullRequest == nil && workspace.loadingReference == nil ? .pullRequests : .files)
-    }
 
     var body: some View {
         Group {
-            switch page {
+            // The workspace holds the page, so the Review menu can switch it too.
+            switch workspace.sidebarPage {
             case .pullRequests:
                 PullRequestList(inbox: inbox, account: account, workspace: workspace, aiReviews: aiReviews) { reference in
                     workspace.open(reference)
-                    page = .files
                 }
             case .files:
-                FileSidebar(workspace: workspace, aiReviews: aiReviews) { page = .pullRequests }
+                FileSidebar(workspace: workspace, aiReviews: aiReviews) { workspace.showPullRequestList() }
                     .id(workspace.pullRequest?.id) // fresh folder expansion for each pull request
             }
         }
@@ -42,10 +25,6 @@ struct Sidebar: View {
             ToolbarItem {
                 RefreshButton(inbox: inbox, watcher: watcher)
             }
-        }
-        .onChange(of: workspace.loadingReference) { _, reference in
-            // Opening a pull request from elsewhere (like chat history) shows its files.
-            if reference != nil { page = .files }
         }
     }
 }

@@ -15,7 +15,8 @@ extension DiffCanvasView {
 
     override func cursorUpdate(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
-        if isInGutter(point) {
+        // Collapsed rows are clicked like a button, not selected like text.
+        if isInGutter(point) || collapsedRow(atY: point.y) != nil {
             NSCursor.arrow.set()
         } else {
             NSCursor.iBeam.set()
@@ -28,6 +29,7 @@ extension DiffCanvasView {
     }
 
     override func mouseExited(with event: NSEvent) {
+        setHoveredCollapsedRow(nil)
         if !popover.isShown {
             setHover(nil)
         }
@@ -39,12 +41,14 @@ extension DiffCanvasView {
         if visibleRect.contains(point) {
             updateHover(at: point)
         } else {
+            setHoveredCollapsedRow(nil)
             setHover(nil)
         }
     }
 
     private func updateHover(at point: CGPoint) {
         guard !popover.isShown, !isDraggingSelection else { return }
+        setHoveredCollapsedRow(collapsedRow(atY: point.y))
         if let selection, !selection.isCaret { return } // the buttons stay next to the selection
 
         let column = column(atX: point.x)
@@ -61,6 +65,23 @@ extension DiffCanvasView {
         hover = newHover
         setNeedsDisplay(visibleRect)
         placeGutterActions()
+    }
+
+    /// The collapsed row at a height, if that row is one.
+    func collapsedRow(atY y: CGFloat) -> Int? {
+        guard let row = rowIndex(atY: y), case .collapsed = rows[row] else { return nil }
+        return row
+    }
+
+    private func setHoveredCollapsedRow(_ row: Int?) {
+        guard row != hoveredCollapsedRow else { return }
+        if let old = hoveredCollapsedRow {
+            setNeedsDisplay(rowRect(old))
+        }
+        hoveredCollapsedRow = row
+        if let row {
+            setNeedsDisplay(rowRect(row))
+        }
     }
 
     // MARK: - Blocks

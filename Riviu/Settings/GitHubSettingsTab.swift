@@ -28,20 +28,24 @@ struct GitHubSettingsTab: View {
                             Text(user.name.map { "\($0) (\(user.login))" } ?? user.login)
                         }
                     }
-                    Button("Sign Out", role: .destructive) { account.signOut() }
+                    HStack {
+                        Spacer()
+                        Button("Sign Out", role: .destructive) { account.signOut() }
+                    }
                 }
             }
             ReviewRequestsSection(settings: settings, watcher: watcher)
             Section {
                 TextField("OAuth App client ID", text: $settings.gitHubClientID, prompt: Text("Optional"))
             } header: {
-                Text("Browser sign-in")
+                Text("Browser Sign-In")
             } footer: {
                 Text("To sign in through the browser, register a GitHub OAuth App with device flow enabled and paste its client ID here.")
                     .font(.caption)
             }
         }
         .formStyle(.grouped)
+        .scrollBounceBehavior(.basedOnSize)
     }
 }
 
@@ -70,7 +74,7 @@ private struct ReviewRequestsSection: View {
             }
             .disabled(!settings.checksForReviewRequests)
         } header: {
-            Text("Review requests")
+            Text("Review Requests")
         } footer: {
             Text("Riviu checks while it's open, including from the menu bar. The AI review uses the provider and model set for AI Review in the AI tab.")
                 .font(.caption)

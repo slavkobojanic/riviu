@@ -19,7 +19,7 @@ struct TourSection: View {
                     Text("\(tour.stops.count) \(tour.stops.count == 1 ? "stop" : "stops")")
                         .font(.caption)
                     Button("Start Tour", systemImage: "play.fill") { workspace.startTour() }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.bordered)
                 }
             }
             if let tour = workspace.tour {
@@ -100,12 +100,49 @@ struct TourCarousel: View {
     /// Each card's vertical center in the scroll view, to find the one nearest the middle.
     @State private var cardCenters: [Int: CGFloat] = [:]
     @State private var keyMonitor: Any?
+    /// The window the tour is shown in, so its keys don't fire in other windows or tabs.
+    @State private var window: NSWindow?
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// The stops, then the closing card.
     private var cardCount: Int { tour.stops.count + 1 }
 
+    /// Moving between cards slides smoothly, or jumps when Reduce Motion is on.
+    private var scrollAnimation: Animation? { reduceMotion ? nil : .smooth }
+
     var body: some View {
+        VStack(spacing: 0) {
+            header
+            Divider()
+            carousel
+            Divider()
+            keyHints
+        }
+        .background(Color(nsColor: .underPageBackgroundColor))
+        .background {
+            WindowObserver(onAttach: attach, onBecomeKey: {}, onClose: {})
+        }
+        // The scroll view takes arrow keys before SwiftUI's key handlers see them, so keys are caught on
+        // their way into the window instead.
+        .onAppear {
+            keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+                MainActor.assumeIsolated { handleKey(event) } ? nil : event
+            }
+        }
+        .onDisappear {
+            if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
+            keyMonitor = nil
+        }
+    }
+
+    /// Remembers the window, and takes the arrow keys away from the sidebar list so they move the tour.
+    private func attach(to window: NSWindow) {
+        self.window = window
+        if window.firstResponder is NSTableView { window.makeFirstResponder(nil) }
+    }
+
+    private var carousel: some View {
         HStack(spacing: 0) {
             ChapterRail(tour: tour, workspace: workspace)
                 .frame(width: 200)
@@ -123,11 +160,13 @@ struct TourCarousel: View {
                                     .onGeometryChange(for: CGFloat.self) { $0.frame(in: .scrollView).midY } action: {
                                         cardCenters[index] = $0
                                     }
-                                    .visualEffect { content, geometry in
-                                        let distance = Self.distanceFromMiddle(geometry)
+                                    .visualEffect { [reduceMotion, isFocused = workspace.tourCardIndex == index] content, geometry in
+                                        // With Reduce Motion on, cards out of focus are just dimmed, and don't move.
+                                        let distance = reduceMotion ? 0 : Self.distanceFromMiddle(geometry)
+                                        let opacity = reduceMotion ? (isFocused ? 1 : 0.5) : 1 - abs(distance) * 0.6
                                         return content
                                             .scaleEffect(1 - abs(distance) * 0.1)
-                                            .opacity(1 - abs(distance) * 0.6)
+                                            .opacity(opacity)
                                             .blur(radius: abs(distance) * 4)
                                             // Cards away from the middle drift toward it, so they trail behind a little.
                                             .offset(y: -distance * 40)
@@ -144,7 +183,7 @@ struct TourCarousel: View {
                     }
                     .onChange(of: workspace.tourCardIndex) { _, index in
                         guard let index else { return }
-                        withAnimation(.smooth) { proxy.scrollTo(index, anchor: .center) }
+                        withAnimation(scrollAnimation) { proxy.scrollTo(index, anchor: .center) }
                     }
                     // Once the height is known, and whenever it changes, the focused card goes back to the middle.
                     .onChange(of: geometry.size.height, initial: true) {
@@ -153,26 +192,15 @@ struct TourCarousel: View {
                 }
             }
         }
-        .background(Color(nsColor: .underPageBackgroundColor))
-        .overlay(alignment: .top) { header }
-        .overlay(alignment: .bottom) { keyHints }
-        // The scroll view takes arrow keys before SwiftUI's key handlers see them, so keys are caught on
-        // their way into the window instead.
-        .onAppear {
-            keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-                MainActor.assumeIsolated { handleKey(event) } ? nil : event
-            }
-        }
-        .onDisappear {
-            if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
-            keyMonitor = nil
-        }
     }
 
     /// ↑ and ↓ move between cards, Return opens the stop in the diff and Esc ends the tour.
-    /// Returns false for other keys, and while typing somewhere like the chat.
+    /// Only while the tour's window is in front with no sheet over it, and not while typing somewhere
+    /// like the chat or moving through a list like the sidebar.
     private func handleKey(_ event: NSEvent) -> Bool {
-        if event.window?.firstResponder is NSText { return false }
+        guard let window, event.window === window, window.isKeyWindow, window.attachedSheet == nil else { return false }
+        // Outline views are table views too.
+        if window.firstResponder is NSText || window.firstResponder is NSTableView { return false }
         guard event.modifierFlags.intersection([.command, .option, .control]).isEmpty else { return false }
         switch event.keyCode {
         case 126: workspace.advanceTour(by: -1) // up arrow
@@ -223,10 +251,11 @@ struct TourCarousel: View {
         if nearest != workspace.tourCardIndex {
             workspace.focusTourCard(nearest) // moves it to the middle through onChange
         } else if abs((cardCenters[nearest] ?? middle) - middle) > 2 {
-            withAnimation(.smooth) { proxy.scrollTo(nearest, anchor: .center) }
+            withAnimation(scrollAnimation) { proxy.scrollTo(nearest, anchor: .center) }
         }
     }
 
+    /// A bar above the cards, so End Tour never sits on top of one.
     private var header: some View {
         HStack {
             Label("Guided Tour", systemImage: "map")
@@ -236,14 +265,18 @@ struct TourCarousel: View {
                 .buttonStyle(.bordered)
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        .padding(.vertical, 10)
+        .background(Color(nsColor: .windowBackgroundColor))
     }
 
+    /// A bar below the cards with the keys that drive the tour.
     private var keyHints: some View {
-        Text("↑ ↓ to move    ↩ open in the diff    esc to end the tour")
+        Text("↑↓ Move   ↩ Open in Diff   ⎋ End Tour")
             .font(.caption)
             .foregroundStyle(.secondary)
-            .padding(12)
+            .padding(8)
+            .frame(maxWidth: .infinity)
+            .background(Color(nsColor: .windowBackgroundColor))
     }
 }
 
@@ -337,6 +370,14 @@ private struct TourExcerptView: View {
 
     /// Each line with its syntax colors, once parsed.
     @State private var highlighted: [AttributedString] = []
+    /// How wide the code area is, so the added and removed colors reach its edge even on short lines.
+    @State private var visibleWidth: CGFloat = 0
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
+
+    /// The same height as a row in the diff.
+    private var rowHeight: CGFloat {
+        ceil(font.ascender - font.descender + font.leading) + lineSpacing.extraHeight
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -356,12 +397,28 @@ private struct TourExcerptView: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
             Divider()
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(stop.excerpt.enumerated()), id: \.offset) { index, line in
-                    ExcerptLine(line: line, text: highlighted.indices.contains(index) ? highlighted[index] : AttributedString(lines[index]),
-                                theme: theme, font: font, extraHeight: lineSpacing.extraHeight)
+            // Long lines scroll sideways, all together, instead of being cut off.
+            ScrollView(.horizontal) {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(stop.excerpt.enumerated()), id: \.offset) { index, line in
+                        ExcerptLine(line: line, text: highlighted.indices.contains(index) ? highlighted[index] : AttributedString(lines[index]),
+                                    theme: theme, height: rowHeight)
+                    }
+                }
+                .padding(.trailing, 12)
+                .frame(minWidth: visibleWidth, alignment: .leading)
+                // The colors sit behind the rows as one layer, so every row's color is as wide as the longest line.
+                .background(alignment: .top) {
+                    VStack(spacing: 0) {
+                        ForEach(Array(stop.excerpt.enumerated()), id: \.offset) { _, line in
+                            Rectangle()
+                                .fill(tint(for: line.kind))
+                                .frame(height: rowHeight)
+                        }
+                    }
                 }
             }
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { visibleWidth = $0 }
             .font(Font(font))
             .padding(.vertical, 4)
         }
@@ -378,6 +435,16 @@ private struct TourExcerptView: View {
         let indents = texts.filter { !$0.allSatisfy(\.isWhitespace) }.map { $0.prefix { $0 == " " || $0 == "\t" }.count }
         let shared = indents.min() ?? 0
         return texts.map { String($0.dropFirst(min(shared, $0.prefix { $0 == " " || $0 == "\t" }.count))) }
+    }
+
+    /// The color behind an added or removed line, like in the diff.
+    private func tint(for kind: PatchExcerpt.Line.Kind) -> Color {
+        let palette = DiffPalette(theme: theme, increaseContrast: colorSchemeContrast == .increased)
+        return switch kind {
+        case .added: Color(cgColor: palette.addedLine)
+        case .removed: Color(cgColor: palette.removedLine)
+        case .context: .clear
+        }
     }
 
     /// Parses just these lines. A few lines out of a file don't always parse perfectly, but they come close.
@@ -404,9 +471,8 @@ private struct ExcerptLine: View {
     let line: PatchExcerpt.Line
     let text: AttributedString
     let theme: EditorTheme
-    let font: NSFont
-    /// The editor's line spacing, so code here is spaced like in the diff.
-    let extraHeight: CGFloat
+    /// The height of a row in the diff, with the editor's line spacing.
+    let height: CGFloat
 
     var body: some View {
         HStack(spacing: 0) {
@@ -417,13 +483,9 @@ private struct ExcerptLine: View {
                 .frame(width: 22)
                 .foregroundStyle(Color(nsColor: theme.lineNumber))
             Text(text.characters.isEmpty ? AttributedString(" ") : text)
-                .lineLimit(1)
+                .fixedSize()
         }
-        // The same height as a row in the diff.
-        .frame(height: ceil(font.ascender - font.descender + font.leading) + extraHeight)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        // A plain rectangle: a bare color here takes the rounded shape of the card around it.
-        .background { Rectangle().fill(tint) }
+        .frame(height: height)
     }
 
     private var number: Int? { line.newNumber ?? line.oldNumber }
@@ -433,15 +495,6 @@ private struct ExcerptLine: View {
         case .added: "+"
         case .removed: "−"
         case .context: ""
-        }
-    }
-
-    private var tint: Color {
-        let palette = DiffPalette(theme: theme, increaseContrast: false)
-        return switch line.kind {
-        case .added: Color(cgColor: palette.addedLine)
-        case .removed: Color(cgColor: palette.removedLine)
-        case .context: .clear
         }
     }
 }

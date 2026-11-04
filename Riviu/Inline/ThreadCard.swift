@@ -11,6 +11,7 @@ struct ThreadCard: View {
     @State private var reply = ""
     @State private var isWorking = false
     @State private var errorMessage: String?
+    @FocusState private var isReplyFocused: Bool
 
     init(thread: GitHubReviewThread, workspace: ReviewWorkspace) {
         self.thread = thread
@@ -35,7 +36,7 @@ struct ThreadCard: View {
         }
         .foregroundStyle(.primary)
         .padding(14)
-        .glassEffect(.regular, in: .rect(cornerRadius: 16))
+        .cardBackground(cornerRadius: 16)
     }
 
     private var header: some View {
@@ -83,8 +84,9 @@ struct ThreadCard: View {
             TextField("Reply…", text: $reply, axis: .vertical)
                 .textFieldStyle(.plain)
                 .lineLimit(1...8)
+                .focused($isReplyFocused)
                 .padding(8)
-                .background(.background.opacity(0.55), in: .rect(cornerRadius: 10))
+                .textFieldBackground(isFocused: isReplyFocused)
                 .onSubmit(sendReply)
             Button("Reply", action: sendReply)
                 .buttonStyle(.borderedProminent)

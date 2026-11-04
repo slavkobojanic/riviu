@@ -32,7 +32,7 @@ struct ReviewRulesSection: View {
                 RuleSuggestions(repository: repository, rules: rules, settings: settings)
             }
         } header: {
-            Text("Review rules")
+            Text("Review Rules")
         } footer: {
             Text("Sent with every AI review of that repository. Riviu only suggests rules; nothing is added until you approve it.")
                 .font(.caption)

@@ -35,16 +35,37 @@ extension DiffCanvasView {
                      headNumber: headIndex.map { $0 + 1 })
 
         case let .collapsed(_, hiddenLineCount, change):
-            context.setFillColor(palette.collapsedRow)
+            // Clicking the row shows the hidden lines, so it highlights under the mouse like a button.
+            context.setFillColor(row == hoveredCollapsedRow ? palette.collapsedRowHovered : palette.collapsedRow)
             context.fill(rect)
             let textY = rect.minY + (rect.height - lineHeight) / 2
-            let text = change.map { "⋯   \($0.title), \(hiddenLineCount) \(hiddenLineCount == 1 ? "line" : "lines") hidden" }
-                ?? "⋯   \(hiddenLineCount) unchanged lines"
-            draw(label(text), x: gutterWidth + 10, y: textY, in: context)
+            drawExpandGlyph(in: CGRect(x: 0, y: rect.minY, width: gutterWidth, height: rect.height))
+            let text = change.map { "\($0.title), \(hiddenLineCount) \(hiddenLineCount == 1 ? "line" : "lines") hidden" }
+                ?? "\(hiddenLineCount) unchanged lines"
+            draw(label(text, color: palette.collapsedLabel), x: gutterWidth + 10, y: textY, in: context)
 
         case let .attachment(_, side):
             drawAttachmentBackground(side: side, in: rect, context: context)
         }
+    }
+
+    /// The up-and-down arrows in a collapsed row's gutter, which say the row expands.
+    private func drawExpandGlyph(in gutter: CGRect) {
+        let image = expandGlyphImage()
+        let size = image.size
+        let glyphRect = CGRect(x: gutter.midX - size.width / 2, y: gutter.midY - size.height / 2,
+                               width: size.width, height: size.height)
+        image.draw(in: glyphRect.integral, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+    }
+
+    private func expandGlyphImage() -> NSImage {
+        if let expandGlyph { return expandGlyph }
+        let configuration = NSImage.SymbolConfiguration(pointSize: font.pointSize, weight: .medium)
+            .applying(NSImage.SymbolConfiguration(paletteColors: [NSColor(cgColor: palette.collapsedLabel) ?? .secondaryLabelColor]))
+        let image = NSImage(systemSymbolName: "arrow.up.and.down", accessibilityDescription: nil)?
+            .withSymbolConfiguration(configuration) ?? NSImage()
+        expandGlyph = image
+        return image
     }
 
     /// Attachments sit in their side's column; the other column shows filler.
@@ -71,14 +92,11 @@ extension DiffCanvasView {
         }
         let gutter = CGRect(x: cell.minX, y: cell.minY, width: gutterWidth, height: cell.height)
         let codeArea = CGRect(x: gutter.maxX, y: cell.minY, width: cell.width - gutterWidth, height: cell.height)
-        // Moved, renamed and reformatted lines are faded so the eye skips to real changes.
-        context.saveGState()
-        defer { context.restoreGState() }
-        if line.cosmeticChange != nil {
-            context.setAlpha(0.5)
-        }
+        // Moved, renamed and reformatted lines get a fainter tint so the eye skips to real changes.
+        // Only the tint fades; the code and line numbers stay fully readable.
+        let isFaded = line.cosmeticChange != nil && palette.fadesCosmeticChanges
 
-        drawChangeBackground(for: line.kind, cell: cell, gutter: gutter, context: context)
+        drawChangeBackground(for: line.kind, cell: cell, gutter: gutter, faded: isFaded, context: context)
         let isEmphasized = drawEmphasis(row: row, column: column, gutter: gutter, codeArea: codeArea, context: context)
         drawLineNumbers(for: line, gutter: gutter, emphasized: isEmphasized, baseNumber: baseNumber, headNumber: headNumber, context: context)
 
@@ -86,7 +104,7 @@ extension DiffCanvasView {
         let textX = textOriginX(column)
         context.saveGState()
         context.clip(to: codeArea)
-        drawWordChange(line, textLine: textLine, textX: textX, codeArea: codeArea, context: context)
+        drawWordChange(line, textLine: textLine, textX: textX, codeArea: codeArea, faded: isFaded, context: context)
         drawFindMatches(in: line, row: row, column: column, textLine: textLine, textX: textX, codeArea: codeArea, context: context)
         drawSelection(row: row, column: column, line: line, textLine: textLine, textX: textX, codeArea: codeArea, context: context)
         draw(textLine, x: textX, y: cell.minY, in: context)
@@ -99,7 +117,7 @@ extension DiffCanvasView {
 
     /// "Formatting only", right-aligned on the first line of a cosmetic hunk.
     private func drawChangeLabel(_ title: String, codeArea: CGRect, context: CGContext) {
-        let textLine = label(title)
+        let textLine = label(title, color: palette.collapsedLabel)
         let width = CGFloat(CTLineGetTypographicBounds(textLine, nil, nil, nil))
         let capsule = CGRect(x: codeArea.maxX - width - 22, y: codeArea.minY + 2, width: width + 14, height: codeArea.height - 4)
         context.setFillColor(palette.collapsedRow)
@@ -108,7 +126,12 @@ extension DiffCanvasView {
         draw(textLine, x: capsule.minX + 7, y: codeArea.minY, in: context)
     }
 
-    private func drawChangeBackground(for kind: DiffLine.Kind, cell: CGRect, gutter: CGRect, context: CGContext) {
+    private func drawChangeBackground(for kind: DiffLine.Kind, cell: CGRect, gutter: CGRect, faded: Bool, context: CGContext) {
+        context.saveGState()
+        defer { context.restoreGState() }
+        if faded {
+            context.setAlpha(0.5)
+        }
         switch kind {
         case .unchanged:
             context.setFillColor(palette.gutter)
@@ -151,30 +174,33 @@ extension DiffCanvasView {
 
     private func drawLineNumbers(for line: DiffLine, gutter: CGRect, emphasized: Bool, baseNumber: Int?, headNumber: Int?,
                                  context: CGContext) {
-        let sign = line.kind == .added ? "+" : "−"
+        let style = LineNumberStyle(kind: line.kind, emphasized: emphasized)
+        let sign = label(line.kind == .added ? "+" : "−", color: style.color(in: palette))
         if layout == .split {
-            drawLineNumber(line.number, rightEdge: gutter.minX + lineNumberWidth, y: gutter.minY, emphasized: emphasized, context: context)
+            drawLineNumber(line.number, rightEdge: gutter.minX + lineNumberWidth, y: gutter.minY, style: style, context: context)
             if showsChangeSigns && line.kind != .unchanged {
-                draw(label(sign), x: gutter.minX + lineNumberWidth + 1, y: gutter.minY, in: context)
+                draw(sign, x: gutter.minX + lineNumberWidth + 1, y: gutter.minY, in: context)
             }
         } else {
             if let baseNumber {
-                drawLineNumber(baseNumber, rightEdge: lineNumberWidth, y: gutter.minY, emphasized: emphasized, context: context)
+                drawLineNumber(baseNumber, rightEdge: lineNumberWidth, y: gutter.minY, style: style, context: context)
             }
             if let headNumber {
-                drawLineNumber(headNumber, rightEdge: lineNumberWidth * 2, y: gutter.minY, emphasized: emphasized, context: context)
+                drawLineNumber(headNumber, rightEdge: lineNumberWidth * 2, y: gutter.minY, style: style, context: context)
             }
             if line.kind != .unchanged {
-                draw(label(sign), x: lineNumberWidth * 2 + 5, y: gutter.minY, in: context)
+                draw(sign, x: lineNumberWidth * 2 + 5, y: gutter.minY, in: context)
             }
         }
     }
 
-    private func drawWordChange(_ line: DiffLine, textLine: CTLine, textX: CGFloat, codeArea: CGRect, context: CGContext) {
+    private func drawWordChange(_ line: DiffLine, textLine: CTLine, textX: CGFloat, codeArea: CGRect, faded: Bool,
+                                context: CGContext) {
         guard let range = line.changedRange, !range.isEmpty else { return }
         let start = CTLineGetOffsetForStringIndex(textLine, range.lowerBound, nil)
         let end = CTLineGetOffsetForStringIndex(textLine, range.upperBound, nil)
-        context.setFillColor(line.kind == .added ? palette.addedWord : palette.removedWord)
+        let color = line.kind == .added ? palette.addedWord : palette.removedWord
+        context.setFillColor(faded ? color.copy(alpha: color.alpha * 0.5) ?? color : color)
         context.fill(CGRect(x: textX + start, y: codeArea.minY + 2, width: max(3, end - start), height: codeArea.height - 4))
     }
 
@@ -218,15 +244,14 @@ extension DiffCanvasView {
         CTLineDraw(textLine, context)
     }
 
-    private func drawLineNumber(_ number: Int, rightEdge: CGFloat, y: CGFloat, emphasized: Bool, context: CGContext) {
-        let key = number * 2 + (emphasized ? 1 : 0)
+    private func drawLineNumber(_ number: Int, rightEdge: CGFloat, y: CGFloat, style: LineNumberStyle, context: CGContext) {
+        let key = number * 4 + style.rawValue
         let textLine: CTLine
         if let cached = lineNumberCache[key] {
             textLine = cached
         } else {
-            let color = emphasized ? palette.lineNumberEmphasized : palette.lineNumber
             textLine = CTLineCreateWithAttributedString(NSAttributedString(string: String(number), attributes: [
-                .font: font, foregroundColorKey: color,
+                .font: font, foregroundColorKey: style.color(in: palette),
             ]))
             lineNumberCache[key] = textLine
         }
@@ -234,12 +259,15 @@ extension DiffCanvasView {
         draw(textLine, x: rightEdge - width - 6, y: y, in: context)
     }
 
-    func label(_ text: String) -> CTLine {
-        if let cached = labelCache[text] { return cached }
+    /// A short piece of gutter-style text. Drawn in the line-number color unless another is given.
+    func label(_ text: String, color: CGColor? = nil) -> CTLine {
+        let color = color ?? palette.lineNumber
+        let key = LabelKey(text: text, color: color)
+        if let cached = labelCache[key] { return cached }
         let textLine = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: [
-            .font: font, foregroundColorKey: palette.lineNumber,
+            .font: font, foregroundColorKey: color,
         ]))
-        labelCache[text] = textLine
+        labelCache[key] = textLine
         return textLine
     }
 
@@ -269,4 +297,39 @@ extension DiffCanvasView {
         syntaxColorCache[captureName] = color
         return color
     }
+}
+
+/// Which color a line number is drawn in. The raw value is part of the line-number cache key.
+private enum LineNumberStyle: Int {
+    case plain = 0
+    case emphasized = 1
+    case added = 2
+    case removed = 3
+
+    init(kind: DiffLine.Kind, emphasized: Bool) {
+        if emphasized {
+            self = .emphasized
+        } else {
+            switch kind {
+            case .unchanged: self = .plain
+            case .added: self = .added
+            case .removed: self = .removed
+            }
+        }
+    }
+
+    func color(in palette: DiffPalette) -> CGColor {
+        switch self {
+        case .plain: palette.lineNumber
+        case .emphasized: palette.lineNumberEmphasized
+        case .added: palette.addedLineNumber
+        case .removed: palette.removedLineNumber
+        }
+    }
+}
+
+/// Labels are cached by their text and color, since the same text can be drawn in different colors.
+struct LabelKey: Hashable {
+    let text: String
+    let color: CGColor
 }

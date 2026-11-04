@@ -83,7 +83,7 @@ struct MenuBarPanel: View {
             Button("Open Riviu") { tabs.show() }
             Spacer()
             SettingsLink { Text("Settings…") }
-            Button("Quit") { NSApp.terminate(nil) }
+            Button("Quit Riviu") { NSApp.terminate(nil) }
         }
         .buttonStyle(.borderless)
         .padding(12)

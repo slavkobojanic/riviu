@@ -56,7 +56,7 @@ struct FindingCard: View {
         }
         .foregroundStyle(.primary)
         .padding(14)
-        .glassEffect(.regular, in: .rect(cornerRadius: 16))
+        .cardBackground(cornerRadius: 16)
     }
 }
 
@@ -111,13 +111,14 @@ struct SeverityLabel: View {
     var label: String?
 
     var body: some View {
-        Label {
-            Text(label ?? severity.rawValue)
-        } icon: {
+        // An HStack rather than a Label, which gets a wide icon column inside sidebar lists.
+        HStack(spacing: 4) {
             Image(systemName: symbol)
                 .foregroundStyle(color)
+            Text(label ?? severity.rawValue)
         }
         .font(.caption.weight(.semibold))
+        .accessibilityElement(children: .combine)
     }
 
     private var symbol: String {

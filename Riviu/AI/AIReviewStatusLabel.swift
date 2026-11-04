@@ -9,19 +9,25 @@ struct AIReviewStatusLabel: View {
         Group {
             switch aiReviews.activity(for: reference) {
             case .queued:
-                Label("Summary queued", systemImage: "clock")
+                HStack(spacing: 4) {
+                    Image(systemName: "clock")
+                    Text("Summary queued")
+                }
             case .reviewing:
-                HStack(spacing: 6) {
+                HStack(spacing: 4) {
                     ProgressView()
                         .controlSize(.mini)
                     Text("Generating summary…")
                 }
             case .failed:
-                Label("Summary failed", systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.statusRed)
+                HStack(spacing: 4) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.statusRed)
+                    Text("Summary failed")
+                }
             case nil:
                 if let review = aiReviews.review(for: reference) {
-                    HStack(spacing: 6) {
+                    HStack(spacing: 8) {
                         SeverityLabel(severity: review.risk, label: "\(review.risk.rawValue) risk")
                         Text(review.findings.count == 1 ? "1 finding" : "\(review.findings.count) findings")
                     }
@@ -29,5 +35,7 @@ struct AIReviewStatusLabel: View {
             }
         }
         .font(.caption)
+        // Quieter than the title it sits under. Symbols with their own colour keep it.
+        .foregroundStyle(.secondary)
     }
 }

@@ -10,6 +10,9 @@ struct DiffPalette {
     let lineNumberEmphasized: CGColor
     let separator: CGColor
     let collapsedRow: CGColor
+    let collapsedRowHovered: CGColor
+    /// The "N unchanged lines" text, lifted so it reads on the collapsed row's tint.
+    let collapsedLabel: CGColor
     let selection: CGColor
     let selectionGutter: CGColor
     let blockText: CGColor
@@ -26,12 +29,27 @@ struct DiffPalette {
     let removedGutter: CGColor
     let removedWord: CGColor
     let removedMarker: CGColor
+    /// Line numbers and +/− signs on added and removed lines, lifted so they read on the tinted gutter.
+    let addedLineNumber: CGColor
+    let removedLineNumber: CGColor
+
+    /// Moved and reformatted lines get a fainter tint so the eye skips to real changes.
+    /// With Increase Contrast on they're drawn like any other change.
+    let fadesCosmeticChanges: Bool
 
     init(theme: EditorTheme, increaseContrast: Bool) {
         let dark = theme.isDark
         let boost: CGFloat = increaseContrast ? 1.6 : 1
+        func tintColor(_ color: NSColor, dark darkAlpha: CGFloat, light lightAlpha: CGFloat) -> NSColor {
+            color.withAlphaComponent((dark ? darkAlpha : lightAlpha) * boost)
+        }
         func tint(_ color: NSColor, dark darkAlpha: CGFloat, light lightAlpha: CGFloat) -> CGColor {
-            color.withAlphaComponent((dark ? darkAlpha : lightAlpha) * boost).cgColor
+            tintColor(color, dark: darkAlpha, light: lightAlpha).cgColor
+        }
+        // Text drawn on a tint must reach 4.5:1 against what's actually on screen: the tints laid over the background.
+        func readableText(on tints: [NSColor]) -> CGColor {
+            let surface = tints.reduce(theme.background) { ColorContrast.composite($1, over: $0) }
+            return ColorContrast.adjusted(theme.lineNumber, on: surface, toAtLeast: 4.5, toward: theme.foreground).cgColor
         }
 
         background = theme.background.cgColor
@@ -44,6 +62,9 @@ struct DiffPalette {
         lineNumberEmphasized = theme.foreground.cgColor
         separator = tint(theme.foreground, dark: 0.14, light: 0.14)
         collapsedRow = tint(theme.accent, dark: 0.10, light: 0.07)
+        collapsedRowHovered = tint(theme.accent, dark: 0.18, light: 0.13)
+        // Lifted against the stronger hovered tint, so it also reads on the plain one.
+        collapsedLabel = readableText(on: [tintColor(theme.accent, dark: 0.18, light: 0.13)])
         selection = theme.selection.cgColor
         selectionGutter = tint(theme.accent, dark: 0.22, light: 0.18)
         blockText = tint(theme.accent, dark: 0.08, light: 0.06)
@@ -54,14 +75,23 @@ struct DiffPalette {
 
         let green = NSColor(hex: dark ? 0x3FB950 : 0x1A7F37)
         let red = NSColor(hex: dark ? 0xF85149 : 0xCF222E)
-        addedLine = tint(green, dark: 0.15, light: 0.10)
-        addedGutter = tint(green, dark: 0.24, light: 0.17)
+        let addedLineTint = tintColor(green, dark: 0.15, light: 0.10)
+        let addedGutterTint = tintColor(green, dark: 0.24, light: 0.17)
+        addedLine = addedLineTint.cgColor
+        addedGutter = addedGutterTint.cgColor
         addedWord = tint(green, dark: 0.38, light: 0.26)
         addedMarker = green.cgColor
-        removedLine = tint(red, dark: 0.15, light: 0.09)
-        removedGutter = tint(red, dark: 0.24, light: 0.16)
+        let removedLineTint = tintColor(red, dark: 0.15, light: 0.09)
+        let removedGutterTint = tintColor(red, dark: 0.24, light: 0.16)
+        removedLine = removedLineTint.cgColor
+        removedGutter = removedGutterTint.cgColor
         removedWord = tint(red, dark: 0.38, light: 0.25)
         removedMarker = red.cgColor
+        // The gutter of a changed line is the line tint with the gutter tint on top.
+        addedLineNumber = readableText(on: [addedLineTint, addedGutterTint])
+        removedLineNumber = readableText(on: [removedLineTint, removedGutterTint])
+
+        fadesCosmeticChanges = !increaseContrast
     }
 }
 
@@ -82,6 +112,12 @@ enum ColorContrast {
             result = color.blended(withFraction: amount, of: target) ?? target
         }
         return result
+    }
+
+    /// What a see-through `color` looks like painted over an opaque `background`.
+    static func composite(_ color: NSColor, over background: NSColor) -> NSColor {
+        let alpha = color.alphaComponent
+        return background.blended(withFraction: alpha, of: color.withAlphaComponent(1)) ?? background
     }
 
     private static func luminance(_ color: NSColor) -> CGFloat {

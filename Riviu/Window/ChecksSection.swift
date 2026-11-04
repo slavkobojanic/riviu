@@ -10,6 +10,8 @@ struct ChecksSection: View {
 
     private var failing: [GitHubCheckRun] { workspace.checkRuns.filter(\.isFailure) }
     private var others: [GitHubCheckRun] { workspace.checkRuns.filter { !$0.isFailure } }
+    /// Passing checks are folded away only when something is failing; otherwise they're all listed.
+    private var hasHiddenChecks: Bool { !failing.isEmpty && !others.isEmpty }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -18,7 +20,7 @@ struct ChecksSection: View {
                     .font(.title3.weight(.semibold))
                 ChecksSummaryLabel(checkRuns: workspace.checkRuns)
                 Spacer()
-                if !others.isEmpty {
+                if hasHiddenChecks {
                     Button(showsPassing ? "Hide Others" : "Show All \(workspace.checkRuns.count)") { showsPassing.toggle() }
                         .buttonStyle(.borderless)
                 }
@@ -71,9 +73,9 @@ private struct CheckRow: View {
             Spacer()
             Text(run.isRunning ? "Running" : (run.conclusion ?? "").replacingOccurrences(of: "_", with: " ").capitalized)
                 .font(.caption)
+                .foregroundStyle(.secondary)
             if let url = run.htmlUrl {
-                Link(destination: url) { Image(systemName: "arrow.up.right.square") }
-                    .help("Open on GitHub")
+                OpenOnGitHubLink(url: url)
             }
         }
     }
@@ -101,8 +103,7 @@ private struct FailedCheckRow: View {
                         .help("Ask the AI what broke, from the end of the job's log and the diff")
                 }
                 if let url = run.htmlUrl {
-                    Link(destination: url) { Image(systemName: "arrow.up.right.square") }
-                        .help("Open on GitHub")
+                    OpenOnGitHubLink(url: url)
                 }
             }
             if let explanation {
@@ -121,7 +122,7 @@ private struct FailedCheckRow: View {
             }
         }
         .padding(14)
-        .background(.red.opacity(0.08), in: .rect(cornerRadius: 14))
+        .cardBackground(tint: .red)
     }
 
     private func explain() {
@@ -135,6 +136,21 @@ private struct FailedCheckRow: View {
             }
             isExplaining = false
         }
+    }
+}
+
+/// A small icon link to the check on GitHub, with a hit area big enough to click easily.
+private struct OpenOnGitHubLink: View {
+    let url: URL
+
+    var body: some View {
+        Link(destination: url) {
+            Label("Open on GitHub", systemImage: "arrow.up.right.square")
+                .labelStyle(.iconOnly)
+                .frame(minWidth: 20, minHeight: 20)
+                .contentShape(.rect)
+        }
+        .help("Open on GitHub")
     }
 }
 

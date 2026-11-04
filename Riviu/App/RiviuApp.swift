@@ -44,7 +44,8 @@ struct RiviuApp: App {
     }
 
     var body: some Scene {
-        // Every window is a tab; ReviewTabs puts new ones in the same tab group.
+        // New tabs and pull requests open as tabs in one window; ReviewTabs puts them in the same tab group.
+        // File > New Window follows the system's "Prefer tabs" setting.
         WindowGroup("Riviu", id: ReviewTabs.windowID) {
             ReviewTab(tabs: tabs, inbox: inbox, account: account, chats: chats, aiReviews: aiReviews, watcher: watcher,
                       settings: settings)
@@ -52,6 +53,9 @@ struct RiviuApp: App {
         }
         .defaultSize(width: 1500, height: 920)
         .commands {
+            // Show Toolbar, Customize Toolbar… and Show Sidebar in the View menu.
+            ToolbarCommands()
+            SidebarCommands()
             ReviewCommands(tabs: tabs, watcher: watcher, settings: settings)
         }
 

@@ -9,17 +9,21 @@ struct ChatPanel: View {
     let workspace: ReviewWorkspace
     @State private var showsHistory = false
 
+    /// The history is only there with a pull request open, like the rest of the chat.
+    private var isShowingHistory: Bool { showsHistory && workspace.pullRequest != nil }
+
     var body: some View {
         VStack(spacing: 0) {
             header
             Divider()
-            if showsHistory {
+            if isShowingHistory {
                 ChatHistoryList(chats: chats, workspace: workspace) { showsHistory = false }
             } else if let pullRequest = workspace.pullRequest {
                 ChatConversation(chats: chats, workspace: workspace, pullRequest: pullRequest)
             } else {
-                ContentUnavailableView("No Pull Request Open", systemImage: "sparkles",
-                                       description: Text("Open a pull request to chat about it."))
+                // Quieter than the "No Pull Request Open" in the middle of the window, which already says why.
+                ContentUnavailableView("No Chat", systemImage: "sparkles",
+                                       description: Text("Open a pull request to ask about it."))
                     .frame(maxHeight: .infinity)
             }
         }
@@ -28,7 +32,7 @@ struct ChatPanel: View {
     private var header: some View {
         HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(showsHistory ? "Chat History" : (chats.activeChat?.title ?? "New Chat"))
+                Text(headerTitle)
                     .font(.headline)
                     .lineLimit(1)
                 if let pullRequest = workspace.pullRequest {
@@ -43,15 +47,22 @@ struct ChatPanel: View {
             }
             .toggleStyle(.button)
             .help("Show previous chats")
+            .disabled(workspace.pullRequest == nil)
             Button("New Chat", systemImage: "square.and.pencil") {
                 chats.startNewChat()
                 showsHistory = false
             }
             .help("Start a new chat about this pull request")
+            .disabled(workspace.pullRequest == nil)
         }
         .labelStyle(.iconOnly)
         .buttonStyle(.borderless)
         .padding(12)
+    }
+
+    private var headerTitle: String {
+        if workspace.pullRequest == nil { return "Chat" }
+        return isShowingHistory ? "Chat History" : (chats.activeChat?.title ?? "New Chat")
     }
 }
 

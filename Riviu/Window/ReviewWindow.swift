@@ -26,7 +26,8 @@ struct ReviewWindow: View {
         }
         .navigationTitle(title)
         .navigationSubtitle(subtitle)
-        .toolbar { toolbar }
+        // An id for the toolbar and each item, so View > Customize Toolbar… can rearrange them.
+        .toolbar(id: "review") { toolbar }
         .sheet(isPresented: showsReviewSheet) {
             ReviewSubmissionSheet(workspace: workspace, initialEvent: workspace.reviewSheetVerdict ?? .comment)
         }
@@ -70,49 +71,60 @@ struct ReviewWindow: View {
     }
 
     @ToolbarContentBuilder
-    private var toolbar: some ToolbarContent {
-        ToolbarItem(placement: .principal) {
+    private var toolbar: some CustomizableToolbarContent {
+        ToolbarItem(id: "layout", placement: .principal) {
             Picker("Layout", selection: $settings.diffLayout) {
                 Label("Unified", systemImage: "rectangle").tag(DiffLayout.unified)
                 Label("Split", systemImage: "rectangle.split.2x1").tag(DiffLayout.split)
             }
             .pickerStyle(.segmented)
             .labelStyle(.iconOnly)
-            .help("Unified or split diff (⌥⌘D)")
+            .help("Unified or split diff (⌃⌘L)")
+            .disabled(!isShowingFile)
         }
-        ToolbarItemGroup {
+        ToolbarItem(id: "viewed") {
             Toggle(isOn: Binding(get: { workspace.isSelectedFileViewed }, set: { _ in workspace.toggleViewedForSelectedFile() })) {
                 Label("Viewed", systemImage: workspace.isSelectedFileViewed ? "checkmark.circle.fill" : "checkmark.circle")
             }
-            .help("Mark this file as viewed (⇧⌘V)")
+            .help("Mark this file as viewed (⌃⌘V)")
             .disabled(!isShowingFile)
+        }
+        ToolbarItem(id: "expandAll") {
             Toggle(isOn: $workspace.expandAll) {
                 Label("Expand All", systemImage: "arrow.up.and.down")
             }
             .help("Show every unchanged line (⌥⌘E)")
             .disabled(!isShowingFile)
+        }
+        ToolbarItem(id: "logicChangesOnly") {
             Toggle(isOn: $workspace.hidesCosmeticChanges) {
                 Label("Logic Changes Only", systemImage: "line.3.horizontal.decrease")
             }
             .help("Hide hunks that only move, rename or reformat code (⌥⌘L)")
             .disabled(!isShowingFile)
+        }
+        ToolbarItem(id: "find") {
             Button("Find", systemImage: "magnifyingglass") { workspace.showFind() }
                 .help("Find in file (⌘F)")
                 .disabled(!isShowingFile)
         }
         ToolbarSpacer(.fixed)
-        ToolbarItemGroup {
-            if let url = workspace.pullRequest?.webURL {
-                // A Button rather than a Link, so it's drawn like the other toolbar buttons.
-                Button("Open on GitHub", systemImage: "safari") { openURL(url) }
-                    .help("Open this pull request on GitHub")
+        ToolbarItem(id: "openOnGitHub") {
+            // A Button rather than a Link, so it's drawn like the other toolbar buttons. It stays in the toolbar
+            // with nothing open, so customizing the toolbar always shows it.
+            Button("Open on GitHub", systemImage: "safari") {
+                if let url = workspace.pullRequest?.webURL { openURL(url) }
             }
+            .help("Open this pull request on GitHub")
+            .disabled(workspace.pullRequest?.webURL == nil)
+        }
+        ToolbarItem(id: "submitReview") {
             Button("Submit Review", systemImage: "paperplane") { workspace.reviewSheetVerdict = .comment }
                 .disabled(!workspace.canSubmitReview)
                 .help(workspace.canSubmitReview ? "Post your comments and verdict to GitHub" : "Open a GitHub pull request to submit a review")
         }
         ToolbarSpacer(.fixed)
-        ToolbarItem {
+        ToolbarItem(id: "aiChat") {
             Toggle(isOn: $settings.showsChatPanel) {
                 Label("AI Chat", systemImage: "sidebar.trailing")
             }

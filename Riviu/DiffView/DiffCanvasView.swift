@@ -88,8 +88,10 @@ final class DiffCanvasView: NSView, NSPopoverDelegate {
 
     var textLineCache: [Int: CTLine] = [:]
     var lineNumberCache: [Int: CTLine] = [:]
-    var labelCache: [String: CTLine] = [:]
+    var labelCache: [LabelKey: CTLine] = [:]
     var syntaxColorCache: [String: CGColor?] = [:]
+    /// The arrows drawn in collapsed rows, tinted for the current theme.
+    var expandGlyph: NSImage?
 
     // MARK: Attachments
 
@@ -99,6 +101,8 @@ final class DiffCanvasView: NSView, NSPopoverDelegate {
     // MARK: Interaction state
 
     var hover: GutterHover?
+    /// The collapsed "N unchanged lines" row under the mouse, highlighted because clicking it expands it.
+    var hoveredCollapsedRow: Int?
     var selection: DiffSelection?
     /// Remembered x position while moving the caret up and down, so it doesn't drift on short lines.
     var caretGoalX: CGFloat?
@@ -222,6 +226,7 @@ final class DiffCanvasView: NSView, NSPopoverDelegate {
         lineNumberCache.removeAll()
         labelCache.removeAll()
         syntaxColorCache.removeAll()
+        expandGlyph = nil
     }
 
     @objc private func accessibilityDisplayOptionsChanged() {
@@ -423,6 +428,7 @@ final class DiffCanvasView: NSView, NSPopoverDelegate {
             popover.close()
         }
         hover = nil
+        hoveredCollapsedRow = nil
         selection = nil
         caretGoalX = nil
         gutterActions.isHidden = true

@@ -2,6 +2,9 @@ import AppKit
 import SwiftUI
 
 /// The buttons shown next to a hovered block or a selection. Resting on a button for a second shows what it does.
+///
+/// The tooltip is drawn here rather than with `.help`, because these buttons sit in a hosting view that moves with
+/// the mouse and lets clicks through around them; it's styled to look like the system's tooltip.
 struct GutterActions: View {
     /// Room above and to the right of the buttons for a tooltip, which can be wider than the buttons.
     static let tooltipRoom = CGSize(width: 320, height: 30)
@@ -54,14 +57,14 @@ struct GutterActions: View {
         .overlay(alignment: .topLeading) {
             if tooltipButton == title {
                 Text(tooltip)
-                    .font(.caption)
+                    .font(Font(NSFont.toolTipsFont(ofSize: 0)))
+                    .foregroundStyle(.primary)
                     .fixedSize()
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(Color(nsColor: .windowBackgroundColor), in: .rect(cornerRadius: 5))
-                    .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(.separator))
-                    .shadow(color: .black.opacity(0.15), radius: 3, y: 1)
-                    .offset(y: -26)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color(nsColor: .windowBackgroundColor), in: .rect(cornerRadius: 4))
+                    .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(.separator, lineWidth: 0.5))
+                    .offset(y: -24)
                     .allowsHitTesting(false)
             }
         }

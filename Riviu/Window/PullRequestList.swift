@@ -12,6 +12,8 @@ struct PullRequestList: View {
     @Environment(ReviewTabs.self) private var tabs
 
     @State private var searchText = ""
+    /// The highlighted row. It follows the open pull request, and the arrow keys move it.
+    @State private var selection: PullRequestReference?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -58,9 +60,18 @@ struct PullRequestList: View {
             .pickerStyle(.segmented)
             .labelsHidden()
             .frame(maxWidth: .infinity)
-            TextField("Search, e.g. label:bug", text: $searchText)
-                .textFieldStyle(.roundedBorder)
-                .onSubmit { inbox.query.text = searchText }
+            SearchField(text: $searchText, prompt: "Search, e.g. label:bug") {
+                inbox.query.text = searchText
+            }
+        }
+        // Searches once typing pauses. Clearing the field goes back to the full list.
+        .task(id: searchText) {
+            do {
+                try await Task.sleep(for: .milliseconds(500))
+            } catch {
+                return // the text changed again
+            }
+            inbox.query.text = searchText
         }
         // Menus and segments stretch to fill their frame instead of sitting centered in it.
         .buttonSizing(.flexible)
@@ -86,25 +97,24 @@ struct PullRequestList: View {
                                    description: Text("Nothing matches these filters."))
                 .frame(maxHeight: .infinity)
         } else {
-            List {
+            List(selection: Binding(get: { selection }, set: select)) {
                 ForEach(inbox.pullRequests) { summary in
                     let reference = PullRequestReference(repository: summary.repository, number: summary.number)
-                    Button {
-                        // ⌘-click opens it in a new tab, like a link in Safari.
-                        if NSEvent.modifierFlags.contains(.command) {
-                            tabs.open(reference)
-                        } else {
-                            onOpen(reference)
-                        }
-                    } label: {
-                        PullRequestRow(summary: summary, reference: reference, isOpen: workspace.pullRequest?.reference == reference,
-                                       aiReviews: aiReviews)
-                    }
-                    .buttonStyle(.plain)
-                    .contextMenu {
-                        Button("Open in New Tab") { tabs.open(reference) }
-                    }
+                    PullRequestRow(summary: summary, reference: reference, aiReviews: aiReviews)
+                        .tag(reference)
                 }
+            }
+            .contextMenu(forSelectionType: PullRequestReference.self) { references in
+                if let reference = references.first {
+                    Button("Open") { onOpen(reference) }
+                    Button("Open in New Tab") { tabs.open(reference) }
+                }
+            } primaryAction: { references in
+                // Return or a double-click.
+                if let reference = references.first { onOpen(reference) }
+            }
+            .onChange(of: openReference, initial: true) { _, reference in
+                selection = reference
             }
             .listStyle(.sidebar)
             .overlay(alignment: .top) {
@@ -114,6 +124,29 @@ struct PullRequestList: View {
                         .padding(6)
                 }
             }
+        }
+    }
+
+    /// The pull request open in this tab, or loading.
+    private var openReference: PullRequestReference? {
+        workspace.pullRequest?.reference ?? workspace.loadingReference
+    }
+
+    /// A click opens the pull request, and ⌘-click opens it in a new tab, like a link in Safari.
+    /// The arrow keys only move the selection, so you can look down the list; Return opens it.
+    private func select(_ reference: PullRequestReference?) {
+        let event = NSApp.currentEvent
+        if event?.type == .keyDown {
+            selection = reference
+            return
+        }
+        // ⌘-clicking the selected row asks to deselect it, which gives no row to open.
+        guard let reference else { return }
+        if event?.modifierFlags.contains(.command) == true {
+            tabs.open(reference)
+        } else {
+            selection = reference
+            onOpen(reference)
         }
     }
 
@@ -132,52 +165,78 @@ struct PullRequestList: View {
     }
 }
 
+/// One pull request, laid out like a message in Mail: the state symbol in its own column, the title with the time
+/// beside it, then quieter details underneath.
 private struct PullRequestRow: View {
     let summary: GitHubPullRequestSummary
     let reference: PullRequestReference
-    let isOpen: Bool
     let aiReviews: AIReviewStore
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                stateIcon
-                Text(summary.title)
-                    .font(.body.weight(isOpen ? .semibold : .regular))
-                    .lineLimit(2)
-            }
-            HStack(spacing: 6) {
-                Text("\(summary.repository) #\(String(summary.number))")
-                Text(summary.user.login)
-                Spacer(minLength: 4)
-                if summary.comments > 0 {
-                    Label("\(summary.comments)", systemImage: "bubble.left")
-                }
-                Text(summary.updatedAt, format: .relative(presentation: .numeric, unitsStyle: .narrow))
-            }
-            .font(.caption)
-            .lineLimit(1)
-            AIReviewStatusLabel(reference: reference, aiReviews: aiReviews)
-            if !summary.labels.isEmpty {
-                // A coloured dot and the name, like Finder's tags.
-                HStack(spacing: 10) {
-                    ForEach(summary.labels.prefix(3), id: \.name) { label in
-                        HStack(spacing: 4) {
-                            Circle()
-                                .fill(Color(hex: label.color))
-                                .frame(width: 7, height: 7)
-                            Text(label.name)
-                        }
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            stateIcon
+                .frame(width: 16)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(summary.title)
+                        .lineLimit(2)
+                    Spacer(minLength: 0)
+                    Text(summary.updatedAt, format: .relative(presentation: .numeric, unitsStyle: .narrow))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
-                    }
+                        .fixedSize()
+                }
+                details
+                AIReviewStatusLabel(reference: reference, aiReviews: aiReviews)
+                if !summary.labels.isEmpty {
+                    labels
                 }
             }
         }
-        .padding(.vertical, 4)
-        .padding(.trailing, 6)
+        .padding(.vertical, 6)
         .contentShape(.rect)
+    }
+
+    /// "wedded #80  slavkobojanic", and the number of comments.
+    private var details: some View {
+        HStack(spacing: 8) {
+            Text("\(repositoryName) #\(String(summary.number))")
+                .help(summary.repository)
+            Text(summary.user.login)
+            if summary.comments > 0 {
+                HStack(spacing: 2) {
+                    Image(systemName: "bubble.left")
+                    Text("\(summary.comments)")
+                }
+                .help(summary.comments == 1 ? "1 comment" : "\(summary.comments) comments")
+            }
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+    }
+
+    /// A coloured dot and the name, like Finder's tags.
+    private var labels: some View {
+        HStack(spacing: 10) {
+            ForEach(summary.labels.prefix(3), id: \.name) { label in
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(Color(hex: label.color))
+                        .frame(width: 7, height: 7)
+                    Text(label.name)
+                }
+            }
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+    }
+
+    /// "wedded" from "slavkobojanic/wedded". The owner is the same on most rows, so it's left out.
+    private var repositoryName: String {
+        summary.repository.split(separator: "/").last.map(String.init) ?? summary.repository
     }
 
     private var stateIcon: some View {
@@ -190,9 +249,59 @@ private struct PullRequestRow: View {
         } else {
             ("arrow.triangle.pull", .statusGreen)
         }
+        let name = summary.isMerged ? "Merged" : summary.isDraft ? "Draft" : summary.state.capitalized
         return Image(systemName: symbol)
             .foregroundStyle(color)
-            .help(summary.isDraft ? "Draft" : summary.state.capitalized)
+            .help(name)
+            .accessibilityLabel(name)
+    }
+}
+
+/// AppKit's search field, for the magnifying glass and clear button that SwiftUI's text field doesn't have.
+/// `onSubmit` runs on Return and when the clear button is clicked.
+private struct SearchField: NSViewRepresentable {
+    @Binding var text: String
+    let prompt: String
+    let onSubmit: () -> Void
+
+    func makeNSView(context: Context) -> NSSearchField {
+        let field = NSSearchField()
+        field.placeholderString = prompt
+        // Only Return and the clear button send the action; typing is handled by `controlTextDidChange`.
+        field.sendsWholeSearchString = true
+        field.delegate = context.coordinator
+        field.target = context.coordinator
+        field.action = #selector(Coordinator.submit(_:))
+        return field
+    }
+
+    func updateNSView(_ field: NSSearchField, context: Context) {
+        context.coordinator.parent = self
+        if field.stringValue != text {
+            field.stringValue = text
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    final class Coordinator: NSObject, NSSearchFieldDelegate {
+        var parent: SearchField
+
+        init(parent: SearchField) {
+            self.parent = parent
+        }
+
+        func controlTextDidChange(_ notification: Notification) {
+            guard let field = notification.object as? NSSearchField else { return }
+            parent.text = field.stringValue
+        }
+
+        @objc func submit(_ sender: NSSearchField) {
+            parent.text = sender.stringValue
+            parent.onSubmit()
+        }
     }
 }
 

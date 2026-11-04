@@ -23,19 +23,17 @@ struct CommentCard: View {
         }
         .foregroundStyle(.primary)
         .padding(14)
-        .glassEffect(.regular, in: .rect(cornerRadius: 16))
+        .cardBackground(cornerRadius: 16)
     }
 
     private var editButtons: some View {
-        GlassEffectContainer(spacing: 2) {
-            HStack(spacing: 2) {
-                Button("Edit", systemImage: "pencil") { workspace.editComment(comment.id) }
-                Button("Delete", systemImage: "trash") { workspace.deleteComment(comment.id) }
-            }
-            .labelStyle(.iconOnly)
-            .buttonStyle(.bordered)
-            .buttonBorderShape(.circle)
-            .controlSize(.small)
+        HStack(spacing: 2) {
+            Button("Edit", systemImage: "pencil") { workspace.editComment(comment.id) }
+            Button("Delete", systemImage: "trash") { workspace.deleteComment(comment.id) }
         }
+        .labelStyle(.iconOnly)
+        .buttonStyle(.bordered)
+        .buttonBorderShape(.circle)
+        .controlSize(.small)
     }
 }

@@ -20,7 +20,7 @@ struct AISettingsTab: View {
                     CommandLineToolRow(tool: tool, settings: settings)
                 }
             } header: {
-                Text("Command-line tools")
+                Text("Command-Line Tools")
             } footer: {
                 Text("Claude Code, Codex and Cursor use the account you're signed into in their CLI, including your subscription. "
                      + "Pi runs OpenRouter models, with Pi's OpenRouter sign-in or OPENROUTER_API_KEY"
@@ -82,25 +82,34 @@ private struct TaskSection: View {
     }
 }
 
-/// A model name, typed or picked from suggestions.
+/// A model name, typed or picked from suggestions, like a combo box.
 private struct ModelField: View {
     @Binding var model: String
     let suggestions: [String]
     let placeholder: String
 
     var body: some View {
-        HStack {
-            TextField("Model", text: $model, prompt: Text(placeholder))
-            if !suggestions.isEmpty {
-                Menu("Suggestions") {
-                    Button("Default") { model = "" }
-                    Divider()
-                    ForEach(suggestions, id: \.self) { suggestion in
-                        Button(suggestion) { model = suggestion }
+        LabeledContent("Model") {
+            HStack(spacing: 4) {
+                TextField("Model", text: $model, prompt: Text(placeholder))
+                    .labelsHidden()
+                    .textFieldStyle(.roundedBorder)
+                    .multilineTextAlignment(.leading)
+                if !suggestions.isEmpty {
+                    Menu {
+                        Button("Default") { model = "" }
+                        Divider()
+                        ForEach(suggestions, id: \.self) { suggestion in
+                            Button(suggestion) { model = suggestion }
+                        }
+                    } label: {
+                        Label("Suggested Models", systemImage: "chevron.down")
+                            .labelStyle(.iconOnly)
                     }
+                    .menuIndicator(.hidden)
+                    .fixedSize()
+                    .help("Suggested models")
                 }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
             }
         }
     }
@@ -234,12 +243,6 @@ private struct ConnectionTestRow: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
-            Button("Test", action: test)
-                .disabled(isTesting)
-            if isTesting {
-                ProgressView()
-                    .controlSize(.small)
-            }
             switch result {
             case let .success(reply):
                 Label("Connected: “\(reply)”", systemImage: "checkmark.circle.fill")
@@ -252,6 +255,13 @@ private struct ConnectionTestRow: View {
             case nil:
                 EmptyView()
             }
+            Spacer()
+            if isTesting {
+                ProgressView()
+                    .controlSize(.small)
+            }
+            Button("Test", action: test)
+                .disabled(isTesting)
         }
         .onChange(of: settings.provider(for: task)) { result = nil }
         .onChange(of: settings.model(for: task)) { result = nil }

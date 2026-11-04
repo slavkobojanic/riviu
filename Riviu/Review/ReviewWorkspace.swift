@@ -57,6 +57,12 @@ struct FindStatus: Equatable {
     var total = 0
 }
 
+/// What the sidebar shows: the pull request list, or the open pull request's files.
+enum SidebarPage {
+    case pullRequests
+    case files
+}
+
 /// The review the user is looking at: the open pull request and file, the rows the diff view draws,
 /// and the user's comments, viewed files and find-in-file state.
 @Observable
@@ -69,6 +75,10 @@ final class ReviewWorkspace {
 
     /// True while the pull request's overview is shown instead of a file.
     private(set) var showsOverview = false
+
+    /// Opening a pull request switches this to its files; the sidebar's back button and
+    /// Review > Show Pull Requests switch it back.
+    var sidebarPage = SidebarPage.pullRequests
 
     var selectedFilePath: String? {
         didSet {
@@ -188,6 +198,7 @@ final class ReviewWorkspace {
     }
 
     private func load(_ reference: PullRequestReference) {
+        sidebarPage = .files
         guard reference != pullRequest?.reference, reference != loadingReference else { return }
         openTask?.cancel()
         loadingReference = reference
@@ -246,6 +257,10 @@ final class ReviewWorkspace {
     }
 
     // MARK: - Navigation
+
+    func showPullRequestList() {
+        sidebarPage = .pullRequests
+    }
 
     func showOverview() {
         pauseTourIfTouring()

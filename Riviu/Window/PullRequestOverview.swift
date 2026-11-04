@@ -76,7 +76,7 @@ private struct VerdictBanner: View {
                 .font(.system(size: 30))
                 .foregroundStyle(approves ? .statusGreen : .statusRed)
             VStack(alignment: .leading, spacing: 3) {
-                Text(approves ? "Looks good to approve" : "Changes needed")
+                Text(approves ? "Looks Good to Approve" : "Changes Needed")
                     .font(.title3.weight(.semibold))
                 Text(verdict.reason)
                     .font(.callout)
@@ -101,7 +101,7 @@ private struct VerdictBanner: View {
             .disabled(!workspace.canSubmitReview)
         }
         .padding(16)
-        .background((approves ? Color.green : Color.red).opacity(0.08), in: .rect(cornerRadius: 14))
+        .cardBackground(tint: approves ? .green : .red, cornerRadius: 14)
     }
 }
 
@@ -127,6 +127,7 @@ private struct OverviewHeader: View {
                 .monospacedDigit()
             }
             .font(.callout)
+            .foregroundStyle(.secondary)
         }
     }
 }
@@ -154,7 +155,7 @@ private struct AISummaryCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(18)
-        .glassEffect(.regular, in: .rect(cornerRadius: 18))
+        .cardBackground(cornerRadius: 18)
     }
 
     @ViewBuilder
@@ -187,6 +188,7 @@ private struct AISummaryCard: View {
         HStack(spacing: 12) {
             Text("\(review.author)  \(review.createdAt, format: .relative(presentation: .named))")
                 .font(.caption)
+                .foregroundStyle(.secondary)
             if let files = review.guidelineFiles, !files.isEmpty {
                 Label("Followed \(files.formatted(.list(type: .and)))", systemImage: "doc.text.magnifyingglass")
                     .font(.caption)
@@ -269,6 +271,7 @@ private struct FindingRow: View {
                         .font(.headline)
                     Text("\((finding.filePath as NSString).lastPathComponent)  \(describeLines(finding.lines, on: finding.side))")
                         .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
                     InlineText(markdown: finding.body)
                         .font(.callout)
                 }
@@ -311,11 +314,11 @@ private struct SinceLastReviewBanner: View {
             Button(workspace.showsChangesSinceLastReview ? "Show All Changes" : "Review These Changes") {
                 workspace.setShowsChangesSinceLastReview(!workspace.showsChangesSinceLastReview)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.bordered)
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassEffect(.regular.tint(.blue.opacity(0.12)), in: .rect(cornerRadius: 16))
+        .cardBackground(tint: .blue, cornerRadius: 16)
     }
 }
 
@@ -344,7 +347,7 @@ private struct SpecCheckSection: View {
                 }
             }
             if !specCheck.unrequested.isEmpty {
-                Text("Not asked for")
+                Text("Not Asked For")
                     .font(.headline)
                     .padding(.top, 4)
                 ForEach(specCheck.unrequested, id: \.self) { change in

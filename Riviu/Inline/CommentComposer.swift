@@ -33,7 +33,7 @@ struct CommentComposer: View {
         }
         .foregroundStyle(.primary)
         .padding(14)
-        .glassEffect(.regular, in: .rect(cornerRadius: 16))
+        .cardBackground(cornerRadius: 16)
         .onAppear {
             draft = comment.body
             isEditorFocused = true
@@ -58,27 +58,25 @@ struct CommentComposer: View {
     }
 
     private var formattingBar: some View {
-        GlassEffectContainer(spacing: 4) {
-            HStack(spacing: 4) {
-                formatButton("Bold", symbol: "bold") { wrapSelection(in: "**", "**", placeholder: "bold") }
-                formatButton("Italic", symbol: "italic") { wrapSelection(in: "_", "_", placeholder: "italic") }
-                formatButton("Code", symbol: "chevron.left.forwardslash.chevron.right") { wrapSelection(in: "`", "`", placeholder: "code") }
-                formatButton("Link", symbol: "link") { wrapSelection(in: "[", "](https://)", placeholder: "title") }
-                formatButton("Bulleted List", symbol: "list.bullet") { prefixCurrentLine(with: "- ") }
-                formatButton("Quote", symbol: "text.quote") { prefixCurrentLine(with: "> ") }
-                Spacer()
-                Button(isPolishing ? "Polishing…" : "Polish", systemImage: "wand.and.sparkles", action: polish)
-                    .disabled(isDraftEmpty || isPolishing)
-                    .help("Rewrite this note as a clear, labelled comment with AI (⌥⌘P)")
-                    .keyboardShortcut("p", modifiers: [.command, .option])
-                Button("Suggest Change", systemImage: "plus.forwardslash.minus") {
-                    insertBlock("```suggestion\n\(comment.code)\n```\n")
-                }
-                .help("Insert a GitHub suggestion with the selected code")
+        HStack(spacing: 4) {
+            formatButton("Bold", symbol: "bold") { wrapSelection(in: "**", "**", placeholder: "bold") }
+            formatButton("Italic", symbol: "italic") { wrapSelection(in: "_", "_", placeholder: "italic") }
+            formatButton("Code", symbol: "chevron.left.forwardslash.chevron.right") { wrapSelection(in: "`", "`", placeholder: "code") }
+            formatButton("Link", symbol: "link") { wrapSelection(in: "[", "](https://)", placeholder: "title") }
+            formatButton("Bulleted List", symbol: "list.bullet") { prefixCurrentLine(with: "- ") }
+            formatButton("Quote", symbol: "text.quote") { prefixCurrentLine(with: "> ") }
+            Spacer()
+            Button(isPolishing ? "Polishing…" : "Polish", systemImage: "wand.and.sparkles", action: polish)
+                .disabled(isDraftEmpty || isPolishing)
+                .help("Rewrite this note as a clear, labelled comment with AI (⌥⌘P)")
+                .keyboardShortcut("p", modifiers: [.command, .option])
+            Button("Suggest Change", systemImage: "plus.forwardslash.minus") {
+                insertBlock("```suggestion\n\(comment.code)\n```\n")
             }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
+            .help("Insert a GitHub suggestion with the selected code")
         }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
     }
 
     private var editor: some View {
@@ -88,7 +86,7 @@ struct CommentComposer: View {
             .focused($isEditorFocused)
             .frame(height: editorHeight)
             .padding(8)
-            .background(.background.opacity(0.55), in: .rect(cornerRadius: 10))
+            .textFieldBackground(isFocused: isEditorFocused)
     }
 
     private var preview: some View {
@@ -99,7 +97,7 @@ struct CommentComposer: View {
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.background.opacity(0.3), in: .rect(cornerRadius: 10))
+        .background(.quinary, in: .rect(cornerRadius: 10))
     }
 
     private var footer: some View {
@@ -218,5 +216,31 @@ private struct PolishedComment: View {
                 .textual.textSelection(.enabled)
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+}
+
+/// The background of a text field on a card: the system text background with a hairline border,
+/// which turns into an accent ring while the field has keyboard focus.
+private struct TextFieldBackground: ViewModifier {
+    let isFocused: Bool
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 10)
+        content
+            .background(Color(nsColor: .textBackgroundColor), in: shape)
+            .overlay {
+                if isFocused {
+                    shape.strokeBorder(Color(nsColor: .keyboardFocusIndicatorColor), lineWidth: 3)
+                } else {
+                    shape.strokeBorder(.separator)
+                }
+            }
+    }
+}
+
+extension View {
+    /// An opaque text-field background with a focus ring. See `TextFieldBackground`.
+    func textFieldBackground(isFocused: Bool) -> some View {
+        modifier(TextFieldBackground(isFocused: isFocused))
     }
 }

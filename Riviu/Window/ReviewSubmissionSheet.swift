@@ -16,6 +16,45 @@ struct ReviewSubmissionSheet: View {
     }
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            header
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
+            form
+        }
+        // Fits the content, but can grow for a long summary or many comments, and scrolls beyond that.
+        .frame(width: 520)
+        .frame(minHeight: 320, maxHeight: 800)
+        .presentationSizing(.fitted)
+        .toolbar {
+            ToolbarItemGroup(placement: .cancellationAction) {
+                if workspace.isSubmittingReview {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+                Button("Cancel") { dismiss() }
+            }
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Submit Review", action: submit)
+                    .disabled(!canSubmit)
+            }
+        }
+    }
+
+    /// "Review #80" with the pull request's title beneath.
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(workspace.pullRequest.map { "Review #\($0.reference.number)" } ?? "Submit Review")
+                .font(.title3.weight(.semibold))
+            if let title = workspace.pullRequest?.title {
+                Text(title)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+        }
+    }
+
+    private var form: some View {
         Form {
             Section("Summary") {
                 TextEditor(text: $summary)
@@ -53,16 +92,6 @@ struct ReviewSubmissionSheet: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 520, height: 560)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button("Cancel") { dismiss() }
-            }
-            ToolbarItem(placement: .confirmationAction) {
-                Button("Submit Review", action: submit)
-                    .disabled(!canSubmit)
-            }
-        }
     }
 
     /// GitHub needs a summary to request changes or to leave a review with no line comments.

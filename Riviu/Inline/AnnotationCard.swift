@@ -26,7 +26,7 @@ struct AnnotationCard: View {
         .foregroundStyle(.primary)
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassEffect(.regular.tint(color.opacity(0.12)), in: .rect(cornerRadius: 14))
+        .cardBackground(tint: color)
     }
 
     private var symbol: String {

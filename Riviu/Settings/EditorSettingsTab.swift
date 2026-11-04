@@ -11,7 +11,7 @@ struct EditorSettingsTab: View {
 
     var body: some View {
         Form {
-            Section("Theme") {
+            Section {
                 Picker("Theme", selection: $settings.themeFamily) {
                     ForEach(EditorThemeFamily.allCases) { family in
                         ThemeSwatch(theme: family.theme(dark: colorScheme == .dark), title: family.variantNames)
@@ -20,6 +20,9 @@ struct EditorSettingsTab: View {
                 }
                 .pickerStyle(.radioGroup)
                 .labelsHidden()
+            } header: {
+                Text("Theme")
+            } footer: {
                 Text("Light or dark follows the appearance setting.")
                     .font(.caption)
             }
@@ -30,7 +33,7 @@ struct EditorSettingsTab: View {
                     Divider()
                     ForEach(Self.monospacedFamilies, id: \.self) { Text($0).tag($0) }
                 }
-                Stepper("Size: \(Int(settings.fontSize)) pt", value: $settings.fontSize, in: 9...28, step: 1)
+                NumberStepperField(title: "Size", value: fontSize, range: 9...28, unit: "pt")
                 Picker("Line spacing", selection: $settings.lineSpacing) {
                     ForEach(LineSpacing.allCases) { Text($0.title).tag($0) }
                 }
@@ -43,6 +46,12 @@ struct EditorSettingsTab: View {
             }
         }
         .formStyle(.grouped)
+        .scrollBounceBehavior(.basedOnSize)
+    }
+
+    /// The font size in whole points, for the stepper.
+    private var fontSize: Binding<Int> {
+        Binding(get: { Int(settings.fontSize) }, set: { settings.fontSize = Double($0) })
     }
 }
 

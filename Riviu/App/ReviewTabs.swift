@@ -24,6 +24,9 @@ final class ReviewTabs {
 
     /// Workspaces made for windows that are about to open, already loading their pull request.
     @ObservationIgnored private var waiting: [ReviewWorkspace] = []
+    /// Workspaces whose window should join the others as a tab. Windows from File > New Window aren't in here,
+    /// so they follow the system's "Prefer tabs" setting instead.
+    @ObservationIgnored private var opensAsTab: [ReviewWorkspace] = []
     @ObservationIgnored private var openWindow: OpenWindowAction?
     @ObservationIgnored private let settings: AppSettings
     @ObservationIgnored private let makeWorkspace: () -> ReviewWorkspace
@@ -82,6 +85,7 @@ final class ReviewTabs {
 
     private func openTab(with workspace: ReviewWorkspace) {
         waiting.append(workspace)
+        opensAsTab.append(workspace)
         NSApp.setActivationPolicy(.regular)
         openWindow?(id: Self.windowID)
         NSApp.activate()
@@ -100,14 +104,18 @@ final class ReviewTabs {
         waiting.isEmpty ? makeWorkspace() : waiting.removeFirst()
     }
 
-    /// Puts a new window into the tab group of the others, so it opens as a tab rather than a separate window.
+    /// Remembers a new window. If it was opened as a tab (by `openTab(with:)`), it's put into the tab group of the
+    /// others; any other window, like one from File > New Window, is left to the system's tab setting.
     func register(_ workspace: ReviewWorkspace, window: NSWindow) {
-        window.tabbingMode = .preferred
         window.tabbingIdentifier = Self.windowID
-        let others = tabs.compactMap(\.window).filter { $0 !== window && $0.isVisible }
-        if let other = others.last, !(other.tabbedWindows ?? []).contains(window) {
-            other.addTabbedWindow(window, ordered: .above)
-            window.makeKeyAndOrderFront(nil)
+        if let index = opensAsTab.firstIndex(where: { $0 === workspace }) {
+            opensAsTab.remove(at: index)
+            window.tabbingMode = .preferred
+            let others = tabs.compactMap(\.window).filter { $0 !== window && $0.isVisible }
+            if let other = others.last, !(other.tabbedWindows ?? []).contains(window) {
+                other.addTabbedWindow(window, ordered: .above)
+                window.makeKeyAndOrderFront(nil)
+            }
         }
         tabs.removeAll { $0.workspace === workspace || $0.window == nil }
         tabs.append(Tab(workspace: workspace, window: window))
