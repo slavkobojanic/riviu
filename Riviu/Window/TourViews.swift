@@ -96,7 +96,6 @@ struct TourCarousel: View {
 
     /// Each card's vertical center in the scroll view, to find the one nearest the middle.
     @State private var cardCenters: [Int: CGFloat] = [:]
-    @State private var viewportHeight: CGFloat = 0
     @FocusState private var isFocused: Bool
 
     /// The stops, then the closing card.
@@ -106,43 +105,48 @@ struct TourCarousel: View {
         HStack(spacing: 0) {
             ChapterRail(tour: tour, workspace: workspace)
                 .frame(width: 200)
-            ScrollViewReader { proxy in
-                ScrollView(.vertical) {
-                    LazyVStack(spacing: 32) {
-                        ForEach(0..<cardCount, id: \.self) { index in
-                            card(at: index)
-                                .id(index)
-                                .onGeometryChange(for: CGFloat.self) { $0.frame(in: .scrollView).midY } action: {
-                                    cardCenters[index] = $0
-                                }
-                                .visualEffect { content, geometry in
-                                    let distance = Self.distanceFromMiddle(geometry)
-                                    return content
-                                        .scaleEffect(1 - abs(distance) * 0.1)
-                                        .opacity(1 - abs(distance) * 0.6)
-                                        .blur(radius: abs(distance) * 4)
-                                        // Cards away from the middle drift toward it, so they trail behind a little.
-                                        .offset(y: -distance * 40)
-                                }
+            // GeometryReader sizes from the space it's offered, so the spacers below can't feed back into the
+            // window's minimum size (measuring the scroll view's own height did, and looped).
+            GeometryReader { geometry in
+                ScrollViewReader { proxy in
+                    ScrollView(.vertical) {
+                        LazyVStack(spacing: 32) {
+                            // Half a screen of space above and below lets the first and last cards reach the middle.
+                            Color.clear.frame(height: geometry.size.height / 2)
+                            ForEach(0..<cardCount, id: \.self) { index in
+                                card(at: index)
+                                    .id(index)
+                                    .onGeometryChange(for: CGFloat.self) { $0.frame(in: .scrollView).midY } action: {
+                                        cardCenters[index] = $0
+                                    }
+                                    .visualEffect { content, geometry in
+                                        let distance = Self.distanceFromMiddle(geometry)
+                                        return content
+                                            .scaleEffect(1 - abs(distance) * 0.1)
+                                            .opacity(1 - abs(distance) * 0.6)
+                                            .blur(radius: abs(distance) * 4)
+                                            // Cards away from the middle drift toward it, so they trail behind a little.
+                                            .offset(y: -distance * 40)
+                                    }
+                            }
+                            Color.clear.frame(height: geometry.size.height / 2)
                         }
+                        .padding(.horizontal, 32)
+                        .frame(maxWidth: .infinity)
                     }
-                    .padding(.horizontal, 32)
-                    .frame(maxWidth: .infinity)
-                }
-                // Half a screen of space above and below lets the first and last cards reach the middle.
-                .contentMargins(.vertical, viewportHeight / 2, for: .scrollContent)
-                .scrollIndicators(.never)
-                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { viewportHeight = $0 }
-                .onScrollPhaseChange { _, phase in
-                    if phase == .idle { snapToNearestCard(proxy) }
-                }
-                .onChange(of: workspace.tourCardIndex) { _, index in
-                    guard let index else { return }
-                    withAnimation(.smooth) { proxy.scrollTo(index, anchor: .center) }
-                }
-                .onAppear {
-                    proxy.scrollTo(workspace.tourCardIndex ?? 0, anchor: .center)
-                    isFocused = true
+                    .scrollIndicators(.never)
+                    .onScrollPhaseChange { _, phase in
+                        if phase == .idle { snapToNearestCard(proxy, middle: geometry.size.height / 2) }
+                    }
+                    .onChange(of: workspace.tourCardIndex) { _, index in
+                        guard let index else { return }
+                        withAnimation(.smooth) { proxy.scrollTo(index, anchor: .center) }
+                    }
+                    // Once the height is known, and whenever it changes, the focused card goes back to the middle.
+                    .onChange(of: geometry.size.height, initial: true) {
+                        proxy.scrollTo(workspace.tourCardIndex ?? 0, anchor: .center)
+                    }
+                    .onAppear { isFocused = true }
                 }
             }
         }
@@ -190,8 +194,7 @@ struct TourCarousel: View {
     }
 
     /// When scrolling stops, the card nearest the middle comes into focus and moves to the exact middle.
-    private func snapToNearestCard(_ proxy: ScrollViewProxy) {
-        let middle = viewportHeight / 2
+    private func snapToNearestCard(_ proxy: ScrollViewProxy, middle: CGFloat) {
         guard let nearest = cardCenters.min(by: { abs($0.value - middle) < abs($1.value - middle) })?.key else { return }
         if nearest != workspace.tourCardIndex {
             workspace.focusTourCard(nearest) // moves it to the middle through onChange
