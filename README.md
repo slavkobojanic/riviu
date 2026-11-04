@@ -6,8 +6,13 @@ Requires macOS 27.
 
 ## Install
 
-Download `Riviu.dmg` from the [latest release](https://github.com/slavkobojanic/riviu/releases/latest), open it and
-drag Riviu to Applications. Riviu updates itself.
+```sh
+curl -fsSL https://raw.githubusercontent.com/slavkobojanic/riviu/main/scripts/install.sh | bash
+```
+
+This downloads the latest release, checks it's notarized, installs it in Applications and opens it. Run it again to
+update, or let Riviu update itself. You can also download `Riviu.dmg` from the
+[latest release](https://github.com/slavkobojanic/riviu/releases/latest) and drag Riviu to Applications.
 
 ## Build
 
