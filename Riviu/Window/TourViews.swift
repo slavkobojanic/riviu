@@ -67,7 +67,7 @@ struct TourSection: View {
                 }
                 // A card behind the first shows only its bottom edge, a little narrower each time.
                 .frame(height: depth == 0 ? nil : (depth <= 2 ? 7 : 0), alignment: .bottom)
-                .clipped()
+                .modifier(PeekClip(isOn: depth > 0))
                 .padding(.horizontal, CGFloat(min(depth, 2)) * 10)
                 .opacity(depth > 2 ? 0 : 1)
                 .zIndex(Double(-index))
@@ -88,6 +88,21 @@ struct TourSection: View {
             Task { await aiReviews.generateTour(for: pullRequest) }
         }
         .buttonStyle(.bordered)
+    }
+}
+
+/// Cuts a card in the stack down to its bottom edge, leaving room below for its shadow.
+private struct PeekClip: ViewModifier {
+    let isOn: Bool
+
+    func body(content: Content) -> some View {
+        if isOn {
+            content.mask {
+                Rectangle().padding(.horizontal, -8).padding(.bottom, -6)
+            }
+        } else {
+            content
+        }
     }
 }
 
@@ -121,7 +136,13 @@ private struct StopRow: View {
             .opacity(isBehind ? 0 : 1)
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.fill.opacity(isBehind ? 0.35 : (isHovered ? 0.9 : 0.5)), in: .rect(cornerRadius: 12))
+            .background {
+                let shape = RoundedRectangle(cornerRadius: 12)
+                shape.fill(Color(nsColor: .controlBackgroundColor))
+                    .overlay { shape.fill(.fill.opacity(isBehind ? 0.6 : (isHovered ? 0.7 : 0.35))) }
+                    // Only the card's shape casts the shadow, not its text.
+                    .shadow(color: .black.opacity(0.1), radius: 3, y: 1)
+            }
             .contentShape(.rect(cornerRadius: 12))
         }
         .buttonStyle(.plain)
