@@ -7,7 +7,7 @@ extension DiffCanvasView {
         window?.makeFirstResponder(self)
         let point = convert(event.locationInWindow, from: nil)
 
-        if let row = rowIndex(atY: point.y), case let .collapsed(segmentIndex, _) = rows[row] {
+        if let row = rowIndex(atY: point.y), case let .collapsed(segmentIndex, _, _) = rows[row] {
             onExpandSegment?(segmentIndex)
             return
         }

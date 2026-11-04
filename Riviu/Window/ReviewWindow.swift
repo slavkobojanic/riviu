@@ -86,6 +86,11 @@ struct ReviewWindow: View {
             }
             .help("Show every unchanged line (⌥⌘E)")
             .disabled(!isShowingFile)
+            Toggle(isOn: $workspace.hidesCosmeticChanges) {
+                Label("Logic Changes Only", systemImage: "line.3.horizontal.decrease")
+            }
+            .help("Hide hunks that only move, rename or reformat code (⌥⌘L)")
+            .disabled(!isShowingFile)
             Button("Find", systemImage: "magnifyingglass") { workspace.showFind() }
                 .help("Find in file (⌘F)")
                 .disabled(!isShowingFile)

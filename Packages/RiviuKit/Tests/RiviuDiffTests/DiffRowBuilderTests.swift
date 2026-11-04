@@ -22,7 +22,7 @@ struct DiffRowBuilderTests {
         let rows = DiffRowBuilder.rows(for: file, options: options)
         // 10 unchanged lines before the change: 8 hidden, 2 shown. Same after it.
         let collapsed = rows.compactMap { row -> Int? in
-            if case let .collapsed(_, hidden) = row { return hidden }
+            if case let .collapsed(_, hidden, _) = row { return hidden }
             return nil
         }
         #expect(collapsed == [8, 8])

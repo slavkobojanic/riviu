@@ -6,6 +6,10 @@ public struct DiffRowOptions: Sendable {
     public var expandedSegments: Set<Int> = []
     public var expandAll = false
     public var highlightsWordChanges = true
+    /// From `StructuralChanges.classify`; cosmetic hunks are dimmed and labelled.
+    public var structuralChanges: [Int: StructuralChange] = [:]
+    /// Collapses moved, renamed and reformatted hunks until expanded.
+    public var hidesCosmeticChanges = false
 
     public init() {}
 }
@@ -24,7 +28,12 @@ public enum DiffRowBuilder {
                 rows += unchangedRows(file: file, segmentIndex: index, base: base, head: head,
                                       isFirst: index == 0, isLast: index == lastSegment, options: options)
             case let .changed(removed, added):
-                rows += changedRows(file: file, removed: removed, added: added, options: options)
+                let change = options.structuralChanges[index].flatMap { $0.isCosmetic ? $0 : nil }
+                if let change, options.hidesCosmeticChanges, !options.expandedSegments.contains(index) {
+                    rows.append(.collapsed(segmentIndex: index, hiddenLineCount: max(removed.count, added.count), change: change))
+                } else {
+                    rows += changedRows(file: file, removed: removed, added: added, cosmeticChange: change, options: options)
+                }
             }
         }
         return insert(attachments, into: rows)
@@ -48,7 +57,7 @@ public enum DiffRowBuilder {
         }
         let hidden = count - leading - trailing
         return (0..<leading).map(row)
-            + [.collapsed(segmentIndex: segmentIndex, hiddenLineCount: hidden)]
+            + [.collapsed(segmentIndex: segmentIndex, hiddenLineCount: hidden, change: nil)]
             + ((count - trailing)..<count).map(row)
     }
 
@@ -65,7 +74,8 @@ public enum DiffRowBuilder {
 
     // MARK: - Changed lines
 
-    private static func changedRows(file: FileDiff, removed: Range<Int>, added: Range<Int>, options: DiffRowOptions) -> [DiffRow] {
+    private static func changedRows(file: FileDiff, removed: Range<Int>, added: Range<Int>, cosmeticChange: StructuralChange?,
+                                    options: DiffRowOptions) -> [DiffRow] {
         // Removed and added lines are paired up in order; pairs get word-level highlights.
         let pairCount = min(removed.count, added.count)
         var removedLines: [DiffLine] = []
@@ -77,7 +87,8 @@ public enum DiffRowBuilder {
             if options.highlightsWordChanges && offset < pairCount {
                 changed = WordChange.changedRanges(old: file.baseLines[index], new: file.headLines[added.lowerBound + offset])?.old
             }
-            removedLines.append(DiffLine(side: .base, index: index, text: file.baseLines[index], kind: .removed, changedRange: changed))
+            removedLines.append(DiffLine(side: .base, index: index, text: file.baseLines[index], kind: .removed, changedRange: changed,
+                                         cosmeticChange: cosmeticChange, startsChange: offset == 0))
         }
         for offset in 0..<added.count {
             let index = added.lowerBound + offset
@@ -85,7 +96,8 @@ public enum DiffRowBuilder {
             if options.highlightsWordChanges && offset < pairCount {
                 changed = WordChange.changedRanges(old: file.baseLines[removed.lowerBound + offset], new: file.headLines[index])?.new
             }
-            addedLines.append(DiffLine(side: .head, index: index, text: file.headLines[index], kind: .added, changedRange: changed))
+            addedLines.append(DiffLine(side: .head, index: index, text: file.headLines[index], kind: .added, changedRange: changed,
+                                       cosmeticChange: cosmeticChange, startsChange: offset == 0))
         }
 
         switch options.layout {

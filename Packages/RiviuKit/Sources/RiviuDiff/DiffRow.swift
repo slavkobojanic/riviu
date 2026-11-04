@@ -18,15 +18,22 @@ public struct DiffLine: Sendable, Equatable {
     public let kind: Kind
     /// UTF-16 range of the words that changed within the line, if worth highlighting.
     public let changedRange: Range<Int>?
+    /// Set on changed lines that are only moved, renamed or reformatted; those are drawn dimmed.
+    public let cosmeticChange: StructuralChange?
+    /// True for the first line of its side of a hunk, where the hunk's label is drawn.
+    public let startsChange: Bool
 
     public var number: Int { index + 1 }
 
-    public init(side: DiffSide, index: Int, text: String, kind: Kind, changedRange: Range<Int>? = nil) {
+    public init(side: DiffSide, index: Int, text: String, kind: Kind, changedRange: Range<Int>? = nil,
+                cosmeticChange: StructuralChange? = nil, startsChange: Bool = false) {
         self.side = side
         self.index = index
         self.text = text
         self.kind = kind
         self.changedRange = changedRange
+        self.cosmeticChange = cosmeticChange
+        self.startsChange = startsChange
     }
 }
 
@@ -56,8 +63,8 @@ public enum DiffRow: Sendable {
     case split(base: DiffLine?, head: DiffLine?)
     /// Unified view: a single line, with its line index on each side it exists on.
     case unified(DiffLine, baseIndex: Int?, headIndex: Int?)
-    /// A run of unchanged lines that is hidden until expanded.
-    case collapsed(segmentIndex: Int, hiddenLineCount: Int)
+    /// A run of lines hidden until expanded: unchanged lines, or a cosmetic change when `change` is set.
+    case collapsed(segmentIndex: Int, hiddenLineCount: Int, change: StructuralChange?)
     case attachment(AttachmentID, side: DiffSide)
 
     /// The base and head line indexes shown in this row, or nil for rows that show no code.

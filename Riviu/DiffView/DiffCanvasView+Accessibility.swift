@@ -34,8 +34,9 @@ extension DiffCanvasView {
         case let .unified(line, _, _):
             element.setAccessibilityLabel(spokenDescription(of: line, prefix: line.side == .base ? "Base " : ""))
             element.setAccessibilityRole(.staticText)
-        case let .collapsed(segmentIndex, hiddenLineCount):
-            element.setAccessibilityLabel("\(hiddenLineCount) unchanged lines, collapsed")
+        case let .collapsed(segmentIndex, hiddenLineCount, change):
+            element.setAccessibilityLabel(change.map { "\(hiddenLineCount) lines, \($0.title), collapsed" }
+                ?? "\(hiddenLineCount) unchanged lines, collapsed")
             element.setAccessibilityRole(.button)
             element.onPress = { [weak self] in self?.onExpandSegment?(segmentIndex) }
         case .attachment:

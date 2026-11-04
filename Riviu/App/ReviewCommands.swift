@@ -50,6 +50,10 @@ struct ReviewCommands: Commands {
             .keyboardShortcut("d", modifiers: [.command, .option])
             Button(workspace.expandAll ? "Collapse Unchanged Lines" : "Expand All Lines") { workspace.expandAll.toggle() }
                 .keyboardShortcut("e", modifiers: [.command, .option])
+            Button(workspace.hidesCosmeticChanges ? "Show Cosmetic Changes" : "Show Logic Changes Only") {
+                workspace.hidesCosmeticChanges.toggle()
+            }
+            .keyboardShortcut("l", modifiers: [.command, .option])
             Divider()
             Button(settings.showsChatPanel ? "Hide AI Chat" : "Show AI Chat") { settings.showsChatPanel.toggle() }
                 .keyboardShortcut("i", modifiers: [.command, .option])

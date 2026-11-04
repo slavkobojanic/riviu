@@ -34,11 +34,13 @@ extension DiffCanvasView {
             drawLine(line, row: row, column: 0, in: rect, context: context, baseNumber: baseIndex.map { $0 + 1 },
                      headNumber: headIndex.map { $0 + 1 })
 
-        case let .collapsed(_, hiddenLineCount):
+        case let .collapsed(_, hiddenLineCount, change):
             context.setFillColor(palette.collapsedRow)
             context.fill(rect)
             let textY = rect.minY + (rect.height - lineHeight) / 2
-            draw(label("⋯   \(hiddenLineCount) unchanged lines"), x: gutterWidth + 10, y: textY, in: context)
+            let text = change.map { "⋯   \(hiddenLineCount) \(hiddenLineCount == 1 ? "line" : "lines") · \($0.title), hidden" }
+                ?? "⋯   \(hiddenLineCount) unchanged lines"
+            draw(label(text), x: gutterWidth + 10, y: textY, in: context)
 
         case let .attachment(_, side):
             drawAttachmentBackground(side: side, in: rect, context: context)
@@ -69,6 +71,12 @@ extension DiffCanvasView {
         }
         let gutter = CGRect(x: cell.minX, y: cell.minY, width: gutterWidth, height: cell.height)
         let codeArea = CGRect(x: gutter.maxX, y: cell.minY, width: cell.width - gutterWidth, height: cell.height)
+        // Moved, renamed and reformatted lines are faded so the eye skips to real changes.
+        context.saveGState()
+        defer { context.restoreGState() }
+        if line.cosmeticChange != nil {
+            context.setAlpha(0.5)
+        }
 
         drawChangeBackground(for: line.kind, cell: cell, gutter: gutter, context: context)
         let isEmphasized = drawEmphasis(row: row, column: column, gutter: gutter, codeArea: codeArea, context: context)
@@ -84,6 +92,20 @@ extension DiffCanvasView {
         draw(textLine, x: textX, y: cell.minY, in: context)
         drawCaret(row: row, column: column, line: line, textLine: textLine, textX: textX, codeArea: codeArea, context: context)
         context.restoreGState()
+        if let change = line.cosmeticChange, line.startsChange {
+            drawChangeLabel(change.title, codeArea: codeArea, context: context)
+        }
+    }
+
+    /// "Formatting only", right-aligned on the first line of a cosmetic hunk.
+    private func drawChangeLabel(_ title: String, codeArea: CGRect, context: CGContext) {
+        let textLine = label(title)
+        let width = CGFloat(CTLineGetTypographicBounds(textLine, nil, nil, nil))
+        let capsule = CGRect(x: codeArea.maxX - width - 22, y: codeArea.minY + 2, width: width + 14, height: codeArea.height - 4)
+        context.setFillColor(palette.collapsedRow)
+        context.addPath(CGPath(roundedRect: capsule, cornerWidth: capsule.height / 2, cornerHeight: capsule.height / 2, transform: nil))
+        context.fillPath()
+        draw(textLine, x: capsule.minX + 7, y: codeArea.minY, in: context)
     }
 
     private func drawChangeBackground(for kind: DiffLine.Kind, cell: CGRect, gutter: CGRect, context: CGContext) {

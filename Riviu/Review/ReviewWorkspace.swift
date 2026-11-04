@@ -83,6 +83,11 @@ final class ReviewWorkspace {
         didSet { rebuildRows() }
     }
 
+    /// Collapses hunks that only move, rename or reformat code.
+    var hidesCosmeticChanges = false {
+        didSet { rebuildRows() }
+    }
+
     /// The rows for the selected file. `rowsVersion` changes whenever they are rebuilt.
     private(set) var rows: [DiffRow] = []
     private(set) var rowsVersion = 0
@@ -134,6 +139,7 @@ final class ReviewWorkspace {
     /// Where to land once the pull request being loaded for Back or Forward arrives.
     @ObservationIgnored private var locationToRestore: ReviewLocation?
     @ObservationIgnored private var syntaxByPath: [String: (base: SyntaxDocument, head: SyntaxDocument)] = [:]
+    @ObservationIgnored private var structuralChangesByPath: [String: [Int: StructuralChange]] = [:]
 
     init(settings: AppSettings, account: GitHubAccount, aiReviews: AIReviewStore, rules: ReviewRuleStore) {
         self.settings = settings
@@ -205,6 +211,7 @@ final class ReviewWorkspace {
         pullRequest = newPullRequest
         fileContents = [:]
         syntaxByPath = [:]
+        structuralChangesByPath = [:]
         threads = []
         sinceLastReview = nil
         showsChangesSinceLastReview = false
@@ -373,6 +380,7 @@ final class ReviewWorkspace {
         showsChangesSinceLastReview = shows
         fileContents = [:]
         syntaxByPath = [:]
+        structuralChangesByPath = [:]
         let path = selectedFilePath.flatMap(visibleFile)?.path ?? visibleFiles.first?.path
         selectedFilePath = nil
         selectedFilePath = path
@@ -415,8 +423,18 @@ final class ReviewWorkspace {
         options.highlightsWordChanges = settings.highlightsWordChanges
         options.expandAll = expandAll
         options.expandedSegments = expandedSegments.union(segmentsWithFindMatches(in: diff))
+        options.structuralChanges = structuralChanges(for: diff)
+        options.hidesCosmeticChanges = hidesCosmeticChanges
         rows = DiffRowBuilder.rows(for: diff, options: options, attachments: attachments(forFileAt: diff.path))
         rowsVersion += 1
+    }
+
+    /// Worked out once per file, since it compares every hunk with every other.
+    private func structuralChanges(for diff: FileDiff) -> [Int: StructuralChange] {
+        if let cached = structuralChangesByPath[diff.path] { return cached }
+        let changes = StructuralChanges.classify(diff)
+        structuralChangesByPath[diff.path] = changes
+        return changes
     }
 
     func expandSegment(_ index: Int) {
