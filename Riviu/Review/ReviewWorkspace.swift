@@ -87,6 +87,8 @@ final class ReviewWorkspace {
     private(set) var tourCardIndex: Int?
     /// True while looking at a tour stop in the diff, with a button back to the tour.
     private(set) var isTourPaused = false
+    /// Set to show the review sheet with this verdict picked; nil when it's closed.
+    var reviewSheetVerdict: GitHubReviewSubmission.Event?
 
     /// Collapses hunks that only move, rename or reformat code.
     var hidesCosmeticChanges = false {

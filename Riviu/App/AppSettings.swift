@@ -35,7 +35,7 @@ enum LineSpacing: String, CaseIterable, Identifiable {
 }
 
 enum AIProviderKind: String, CaseIterable, Identifiable {
-    case claudeCode, codex, cursor, anthropicAPI
+    case claudeCode, codex, cursor, openRouter, anthropicAPI
 
     var id: String { rawValue }
 
@@ -44,6 +44,7 @@ enum AIProviderKind: String, CaseIterable, Identifiable {
         case .claudeCode: "Claude Code"
         case .codex: "Codex"
         case .cursor: "Cursor"
+        case .openRouter: "OpenRouter (Pi)"
         case .anthropicAPI: "Claude API (API key)"
         }
     }
@@ -53,6 +54,9 @@ enum AIProviderKind: String, CaseIterable, Identifiable {
         switch self {
         case .claudeCode: ["opus", "sonnet", "haiku"]
         case .anthropicAPI: AnthropicAPIProvider.models
+        // Pi's aliases for each family's newest model, so they don't go out of date.
+        case .openRouter: ["~anthropic/claude-sonnet-latest", "~anthropic/claude-opus-latest", "~google/gemini-pro-latest",
+                           "~deepseek/deepseek-pro-latest", "~moonshotai/kimi-latest"]
         case .codex, .cursor: []
         }
     }
@@ -63,6 +67,7 @@ enum AIProviderKind: String, CaseIterable, Identifiable {
         case .claudeCode: .claudeCode
         case .codex: .codex
         case .cursor: .cursor
+        case .openRouter: .pi
         case .anthropicAPI: nil
         }
     }
@@ -132,6 +137,7 @@ final class AppSettings {
     var claudeCodePath: String { didSet { save(claudeCodePath, for: "claudeCodePath") } }
     var codexPath: String { didSet { save(codexPath, for: "codexPath") } }
     var cursorPath: String { didSet { save(cursorPath, for: "cursorPath") } }
+    var piPath: String { didSet { save(piPath, for: "piPath") } }
 
     var checksForReviewRequests: Bool { didSet { save(checksForReviewRequests, for: "checksForReviewRequests") } }
     var reviewRequestCheckMinutes: Int { didSet { save(reviewRequestCheckMinutes, for: "reviewRequestCheckMinutes") } }
@@ -168,6 +174,7 @@ final class AppSettings {
         claudeCodePath = defaults.string(forKey: "claudeCodePath") ?? ""
         codexPath = defaults.string(forKey: "codexPath") ?? ""
         cursorPath = defaults.string(forKey: "cursorPath") ?? ""
+        piPath = defaults.string(forKey: "piPath") ?? ""
         checksForReviewRequests = defaults.object(forKey: "checksForReviewRequests") as? Bool ?? true
         reviewRequestCheckMinutes = defaults.object(forKey: "reviewRequestCheckMinutes") as? Int ?? 5
         notifiesAboutReviewRequests = defaults.object(forKey: "notifiesAboutReviewRequests") as? Bool ?? true
@@ -235,6 +242,7 @@ final class AppSettings {
         case .claudeCode: claudeCodePath
         case .codex: codexPath
         case .cursor: cursorPath
+        case .pi: piPath
         }
     }
 
@@ -243,6 +251,7 @@ final class AppSettings {
         case .claudeCode: claudeCodePath = path
         case .codex: codexPath = path
         case .cursor: cursorPath = path
+        case .pi: piPath = path
         }
     }
 

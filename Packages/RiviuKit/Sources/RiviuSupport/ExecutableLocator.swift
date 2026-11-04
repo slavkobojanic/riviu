@@ -13,11 +13,30 @@ public enum ExecutableLocator {
         return ([shellPath] + fallbacks).filter { !$0.isEmpty }.joined(separator: ":")
     }()
 
+    /// API keys people export in their shell profile (often `.zshrc`, which only interactive shells read).
+    /// Apps opened from the Dock don't get them, so they're read from the shell once.
+    private static let shellKeyNames = ["OPENROUTER_API_KEY"]
+
+    private static let shellKeys: [String: String] = {
+        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+        var keys: [String: String] = [:]
+        for name in shellKeyNames where ProcessInfo.processInfo.environment[name] == nil {
+            // Markers around the value, since an interactive shell may print other things as it starts.
+            guard let output = runAndRead(shell, arguments: ["-l", "-i", "-c", "printf '<<riviu>>%s<</riviu>>' \"$\(name)\""]),
+                  let start = output.range(of: "<<riviu>>"), let end = output.range(of: "<</riviu>>"),
+                  start.upperBound <= end.lowerBound else { continue }
+            let value = String(output[start.upperBound..<end.lowerBound])
+            if !value.isEmpty { keys[name] = value }
+        }
+        return keys
+    }()
+
     /// The environment child processes run with: ours, plus the login shell's `PATH`
-    /// (Codex, for example, is a Node script and needs `node` on the path).
+    /// (Codex, for example, is a Node script and needs `node` on the path) and API keys from the shell profile.
     public static var environment: [String: String] {
         var environment = ProcessInfo.processInfo.environment
         environment["PATH"] = searchPath
+        environment.merge(shellKeys) { ours, _ in ours }
         return environment
     }
 

@@ -13,6 +13,9 @@ struct PullRequestOverview: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
                 OverviewHeader(pullRequest: pullRequest)
+                if let verdict = currentReview?.verdict {
+                    VerdictBanner(verdict: verdict, workspace: workspace)
+                }
                 if let message = workspace.syncErrorMessage {
                     Label(message, systemImage: "exclamationmark.triangle")
                         .font(.callout)
@@ -56,6 +59,49 @@ struct PullRequestOverview: View {
     private var currentReview: AIReview? {
         guard aiReviews.activity(for: pullRequest.reference) == nil else { return nil }
         return aiReviews.review(for: pullRequest.reference)
+    }
+}
+
+/// The AI's call at a glance: approve, or changes needed, and why. The buttons open the review sheet with that
+/// verdict picked; nothing is sent until it's submitted there.
+private struct VerdictBanner: View {
+    let verdict: ReviewReport.Verdict
+    let workspace: ReviewWorkspace
+
+    private var approves: Bool { verdict.decision == .approve }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 14) {
+            Image(systemName: approves ? "checkmark.seal.fill" : "exclamationmark.octagon.fill")
+                .font(.system(size: 30))
+                .foregroundStyle(approves ? .statusGreen : .statusRed)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(approves ? "Looks good to approve" : "Changes needed")
+                    .font(.title3.weight(.semibold))
+                Text(verdict.reason)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 12)
+            // The AI's pick is the prominent button.
+            HStack(spacing: 8) {
+                if approves {
+                    Button("Request Changes…") { workspace.reviewSheetVerdict = .requestChanges }
+                        .buttonStyle(.bordered)
+                    Button("Approve…") { workspace.reviewSheetVerdict = .approve }
+                        .buttonStyle(.borderedProminent)
+                } else {
+                    Button("Approve…") { workspace.reviewSheetVerdict = .approve }
+                        .buttonStyle(.bordered)
+                    Button("Request Changes…") { workspace.reviewSheetVerdict = .requestChanges }
+                        .buttonStyle(.borderedProminent)
+                }
+            }
+            .disabled(!workspace.canSubmitReview)
+        }
+        .padding(16)
+        .background((approves ? Color.green : Color.red).opacity(0.08), in: .rect(cornerRadius: 14))
     }
 }
 
@@ -163,8 +209,6 @@ private struct AISummaryCard: View {
         HStack(spacing: 10) {
             Button(title, systemImage: "sparkles") { aiReviews.start(for: pullRequest) }
                 .buttonStyle(.borderedProminent)
-            Text("Uses \(AISetup.description(of: .review, settings: settings))")
-                .font(.caption)
         }
     }
 }

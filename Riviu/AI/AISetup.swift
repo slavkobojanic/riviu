@@ -35,6 +35,14 @@ enum AISetup {
         return "\(provider == .anthropicAPI ? "Claude API" : provider.title) (\(model))"
     }
 
+    /// Whether Pi can reach OpenRouter: signed in with Pi, or OPENROUTER_API_KEY set. OpenRouter is only offered then.
+    static func isOpenRouterReady(settings: AppSettings) async -> Bool {
+        guard let pi = executable(for: .pi, settings: settings),
+              let result = try? await ProcessRunner.run(pi, arguments: ["auth", "check", "--provider", "openrouter", "--json"],
+                                                        environment: ExecutableLocator.environment) else { return false }
+        return result.status == 0 && String(decoding: result.output, as: UTF8.self).contains(#""status":"ready""#)
+    }
+
     /// The user's custom path if they set one, otherwise wherever the tool is on the PATH.
     static func executable(for tool: CommandLineTool, settings: AppSettings) -> URL? {
         let customPath = settings.customPath(for: tool).trimmingCharacters(in: .whitespaces)

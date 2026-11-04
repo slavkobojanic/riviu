@@ -74,6 +74,22 @@ public struct ReviewReport: Decodable, Sendable, Equatable {
         }
     }
 
+    /// Whether the AI would approve the pull request as it is.
+    public struct Verdict: Codable, Sendable, Equatable {
+        public enum Decision: String, Codable, Sendable {
+            case approve, requestChanges
+        }
+
+        public let decision: Decision
+        /// Why, in a sentence.
+        public let reason: String
+
+        public init(decision: Decision, reason: String) {
+            self.decision = decision
+            self.reason = reason
+        }
+    }
+
     /// Something only the author can answer, on a line.
     public struct Question: Decodable, Sendable, Equatable {
         public let file: String
@@ -109,6 +125,7 @@ public struct ReviewReport: Decodable, Sendable, Equatable {
     /// A short Markdown overview of the change.
     public let summary: String
     public let risk: Level
+    public let verdict: Verdict?
     public let findings: [Finding]
     public let specCheck: SpecCheck?
     public let questions: [Question]?
@@ -121,6 +138,7 @@ public struct ReviewReport: Decodable, Sendable, Equatable {
     {
       "summary": "Markdown: what the pull request does and anything a reviewer should look at first. At most 150 words.",
       "risk": "low" | "medium" | "high",
+      "verdict": {"decision": "approve" | "requestChanges", "reason": "Why, in one sentence of at most 25 words."},
       "specCheck": {
         "goals": [{"goal": "One thing the description or a linked issue asks for", "status": "addressed" | "partial" | "missing", "note": "Where it is done, or what is missing. At most 25 words."}],
         "unrequested": ["A change nobody asked for, in at most 20 words"],
@@ -144,6 +162,8 @@ public struct ReviewReport: Decodable, Sendable, Equatable {
     Every other line is numbered in the new file. "endLine" is optional, for a finding that spans several lines.
     Add "suggestion" only for a small, certain fix to new-file lines from one hunk; keep the original indentation. Only report real problems: bugs, security issues, missing tests for risky code,
     and confusing code. Return an empty findings list if there are none.
+    Decide the verdict as the reviewer you'd want: "requestChanges" only when something should be fixed before merging,
+    like a bug, a security problem or a missing piece of what was asked for; otherwise "approve".
     For specCheck, list each goal from the description and linked issues (at most 6). If the description is too thin to
     check against, set "tooVagueToCheck": true and leave goals empty rather than guessing. List unrequested changes only
     when they are real behaviour changes. Ask at most 3 questions, only about intent or context the diff can't answer,

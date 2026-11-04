@@ -36,7 +36,7 @@ public struct CommandLineProvider: AIProvider {
                             case let .error(message): throw AIProviderError.commandFailed(message)
                             case .ignored: break
                             }
-                        case .cursor:
+                        case .cursor, .pi:
                             continuation.yield(line + "\n")
                         case .codex:
                             break // Codex writes its final answer to `replyFile` instead.

@@ -14,6 +14,8 @@ nonisolated struct AIReview: Codable, Sendable {
     let author: String
     let summary: String
     let risk: ReviewFinding.Severity
+    /// Missing on reviews made before verdicts were asked for.
+    var verdict: ReviewReport.Verdict?
     var findings: [ReviewFinding]
     /// The repository's guideline files the review followed, like "CLAUDE.md".
     var guidelineFiles: [String]?
@@ -233,6 +235,7 @@ extension AIReview {
         self.author = author
         summary = report.summary
         risk = ReviewFinding.Severity(report.risk)
+        verdict = report.verdict
         specCheck = report.specCheck
         questions = (report.questions ?? []).prefix(3).compactMap { question in
             guard pullRequest.file(at: question.file) != nil, question.line > 0 else { return nil }

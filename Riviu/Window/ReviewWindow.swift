@@ -1,4 +1,5 @@
 import RiviuDiff
+import RiviuGitHub
 import SwiftUI
 
 /// The main window: changed files on the left, the diff in the middle, AI chat on the right.
@@ -10,7 +11,6 @@ struct ReviewWindow: View {
     let aiReviews: AIReviewStore
     let watcher: ReviewRequestWatcher
     @Bindable var settings: AppSettings
-    @State private var showsReviewSheet = false
     @Environment(\.openURL) private var openURL
 
     var body: some View {
@@ -27,8 +27,8 @@ struct ReviewWindow: View {
         .navigationTitle(title)
         .navigationSubtitle(subtitle)
         .toolbar { toolbar }
-        .sheet(isPresented: $showsReviewSheet) {
-            ReviewSubmissionSheet(workspace: workspace)
+        .sheet(isPresented: showsReviewSheet) {
+            ReviewSubmissionSheet(workspace: workspace, initialEvent: workspace.reviewSheetVerdict ?? .comment)
         }
         .environment(settings)
         .preferredColorScheme(settings.appearance.colorScheme)
@@ -46,6 +46,10 @@ struct ReviewWindow: View {
                     themeFamily: settings.themeFamily, font: settings.editorFont, lineSpacing: settings.lineSpacing,
                     findQuery: workspace.isFindVisible ? workspace.findQuery : "", findStep: workspace.findStep,
                     lineToReveal: workspace.lineToReveal)
+    }
+
+    private var showsReviewSheet: Binding<Bool> {
+        Binding(get: { workspace.reviewSheetVerdict != nil }, set: { if !$0 { workspace.reviewSheetVerdict = nil } })
     }
 
     private var isShowingFile: Bool {
@@ -103,7 +107,7 @@ struct ReviewWindow: View {
                 Button("Open on GitHub", systemImage: "safari") { openURL(url) }
                     .help("Open this pull request on GitHub")
             }
-            Button("Submit Review", systemImage: "paperplane") { showsReviewSheet = true }
+            Button("Submit Review", systemImage: "paperplane") { workspace.reviewSheetVerdict = .comment }
                 .disabled(!workspace.canSubmitReview)
                 .help(workspace.canSubmitReview ? "Post your comments and verdict to GitHub" : "Open a GitHub pull request to submit a review")
         }

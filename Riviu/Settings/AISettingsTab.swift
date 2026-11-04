@@ -6,11 +6,13 @@ import SwiftUI
 struct AISettingsTab: View {
     @Bindable var settings: AppSettings
     let rules: ReviewRuleStore
+    /// OpenRouter is offered once Pi says it can reach it.
+    @State private var isOpenRouterReady = false
 
     var body: some View {
         Form {
             ForEach(AITask.allCases) { task in
-                TaskSection(task: task, settings: settings)
+                TaskSection(task: task, settings: settings, isOpenRouterReady: isOpenRouterReady)
             }
             ReviewRulesSection(rules: rules, settings: settings)
             Section {
@@ -20,12 +22,15 @@ struct AISettingsTab: View {
             } header: {
                 Text("Command-line tools")
             } footer: {
-                Text("Claude Code, Codex and Cursor use the account you're signed into in their CLI, including your subscription.")
+                Text("Claude Code, Codex and Cursor use the account you're signed into in their CLI, including your subscription. "
+                     + "Pi runs OpenRouter models, with Pi's OpenRouter sign-in or OPENROUTER_API_KEY"
+                     + (isOpenRouterReady ? " (found)." : " (not found yet)."))
                     .font(.caption)
             }
             AnthropicAPISection()
         }
         .formStyle(.grouped)
+        .task { isOpenRouterReady = await AISetup.isOpenRouterReady(settings: settings) }
     }
 }
 
@@ -33,14 +38,14 @@ struct AISettingsTab: View {
 private struct TaskSection: View {
     let task: AITask
     @Bindable var settings: AppSettings
+    let isOpenRouterReady: Bool
 
     var body: some View {
         Section(task.title) {
             Picker("Provider", selection: provider) {
-                ForEach(AIProviderKind.allCases) { Text($0.title).tag($0) }
+                ForEach(providers) { Text($0.title).tag($0) }
             }
-            ModelField(model: model, suggestions: settings.provider(for: task).suggestedModels,
-                       placeholder: settings.provider(for: task) == .anthropicAPI ? AnthropicAPIProvider.defaultModel : "Default for your account")
+            ModelField(model: model, suggestions: settings.provider(for: task).suggestedModels, placeholder: modelPlaceholder)
             if task == .explain {
                 Picker("Length", selection: $settings.explanationLength) {
                     ForEach(ExplanationLength.allCases) { Text($0.title).tag($0) }
@@ -49,6 +54,19 @@ private struct TaskSection: View {
             }
             InstructionsEditor(task: task, settings: settings)
             ConnectionTestRow(task: task, settings: settings)
+        }
+    }
+
+    /// OpenRouter only once it's ready, unless this task already uses it.
+    private var providers: [AIProviderKind] {
+        AIProviderKind.allCases.filter { $0 != .openRouter || isOpenRouterReady || settings.provider(for: task) == .openRouter }
+    }
+
+    private var modelPlaceholder: String {
+        switch settings.provider(for: task) {
+        case .anthropicAPI: AnthropicAPIProvider.defaultModel
+        case .openRouter: "OpenRouter model ID, like ~anthropic/claude-sonnet-latest"
+        default: "Default for your account"
         }
     }
 

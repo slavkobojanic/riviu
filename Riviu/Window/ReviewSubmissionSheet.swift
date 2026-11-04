@@ -6,9 +6,14 @@ import SwiftUI
 struct ReviewSubmissionSheet: View {
     let workspace: ReviewWorkspace
     @Environment(\.dismiss) private var dismiss
-    @State private var event = GitHubReviewSubmission.Event.comment
+    @State private var event: GitHubReviewSubmission.Event
     @State private var summary = ""
     @State private var errorMessage: String?
+
+    init(workspace: ReviewWorkspace, initialEvent: GitHubReviewSubmission.Event) {
+        self.workspace = workspace
+        _event = State(initialValue: initialEvent)
+    }
 
     var body: some View {
         Form {
