@@ -25,8 +25,6 @@ nonisolated struct ReviewTour: Codable, Sendable {
     let stops: [TourStop]
     /// What the tour leaves out, in the AI's words.
     let rest: String
-    /// Files the tour doesn't stop in.
-    let skippedFileCount: Int
 
     /// Chapter names in tour order, each once.
     var chapters: [String] {
@@ -50,6 +48,5 @@ nonisolated struct ReviewTour: Codable, Sendable {
         headSHA = pullRequest.headSHA
         self.stops = stops
         rest = report.rest ?? ""
-        skippedFileCount = pullRequest.files.count - Set(stops.map(\.filePath)).count
     }
 }

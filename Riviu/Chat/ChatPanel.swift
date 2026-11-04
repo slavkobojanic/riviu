@@ -42,21 +42,24 @@ struct ChatPanel: View {
                 }
             }
             Spacer()
-            Toggle(isOn: $showsHistory) {
-                Label("History", systemImage: "clock.arrow.circlepath")
+            // Both are plain buttons of the same size, so their icons line up.
+            Button("History", systemImage: "clock.arrow.circlepath") {
+                showsHistory.toggle()
             }
-            .toggleStyle(.button)
-            .help("Show previous chats")
+            .foregroundStyle(showsHistory ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+            .help(showsHistory ? "Back to the chat" : "Show previous chats")
             .disabled(workspace.pullRequest == nil)
             Button("New Chat", systemImage: "square.and.pencil") {
                 chats.startNewChat()
                 showsHistory = false
             }
+            .foregroundStyle(.secondary)
             .help("Start a new chat about this pull request")
             .disabled(workspace.pullRequest == nil)
         }
         .labelStyle(.iconOnly)
         .buttonStyle(.borderless)
+        .imageScale(.large)
         .padding(12)
     }
 

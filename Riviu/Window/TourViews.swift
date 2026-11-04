@@ -512,11 +512,6 @@ private struct TourEndCard: View {
                 Text(markdown: tour.rest)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if tour.skippedFileCount > 0 {
-                Text("The tour doesn't stop in \(tour.skippedFileCount) of the changed files. They're in the sidebar when you want them.")
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
             HStack {
                 Button("Start Over", systemImage: "arrow.counterclockwise") { workspace.focusTourCard(0) }
                     .buttonStyle(.bordered)
