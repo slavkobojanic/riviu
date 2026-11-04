@@ -20,17 +20,21 @@ struct ReviewDetail: View {
         } else if let reference = workspace.loadingReference {
             ProgressView("Loading \(reference.id)…")
         } else if let pullRequest = workspace.pullRequest {
-            Group {
-                if workspace.showsOverview {
-                    PullRequestOverview(pullRequest: pullRequest, workspace: workspace, aiReviews: aiReviews)
-                } else {
-                    fileContent
+            if let tour = workspace.tour, workspace.isTouring, !workspace.isTourPaused {
+                TourCarousel(tour: tour, workspace: workspace)
+            } else {
+                Group {
+                    if workspace.showsOverview {
+                        PullRequestOverview(pullRequest: pullRequest, workspace: workspace, aiReviews: aiReviews)
+                    } else {
+                        fileContent
+                    }
                 }
-            }
-            .overlay(alignment: .bottom) {
-                if let tour = workspace.tour, let position = workspace.tourPosition {
-                    TourBar(tour: tour, position: position, workspace: workspace)
-                        .padding(18)
+                .overlay(alignment: .bottom) {
+                    if workspace.isTouring {
+                        BackToTourBar(workspace: workspace)
+                            .padding(18)
+                    }
                 }
             }
         } else {

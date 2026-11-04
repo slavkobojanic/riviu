@@ -52,7 +52,7 @@ final class AIReviewStore {
     @ObservationIgnored private let account: GitHubAccount
     @ObservationIgnored private let rules: ReviewRuleStore
     @ObservationIgnored private let fileURL = URL.applicationSupportDirectory.appending(path: "Riviu/ai-reviews.json")
-    @ObservationIgnored private let toursURL = URL.applicationSupportDirectory.appending(path: "Riviu/ai-tours.json")
+    @ObservationIgnored private let toursURL = URL.applicationSupportDirectory.appending(path: "Riviu/guided-tours.json")
 
     init(settings: AppSettings, account: GitHubAccount, rules: ReviewRuleStore) {
         self.settings = settings
@@ -175,10 +175,9 @@ final class AIReviewStore {
         tourActivities[reference] = .reviewing(author: AISetup.description(of: .review, settings: settings))
         do {
             let provider = try AISetup.makeProvider(for: .review, settings: settings)
-            let hunks = TourHunks(pullRequest: pullRequest)
-            let report = try TourReport.parse(try await provider.reply(to: ReviewPrompts.tourRequest(pullRequest: pullRequest, hunks: hunks)))
-            let tour = hunks.tour(from: report, pullRequest: pullRequest)
-            guard tour.stopCount > 0 else {
+            let report = try TourReport.parse(try await provider.reply(to: ReviewPrompts.tourRequest(pullRequest: pullRequest)))
+            let tour = ReviewTour(report: report, pullRequest: pullRequest)
+            guard !tour.stops.isEmpty else {
                 tourActivities[reference] = .failed("The AI didn't return a tour. Try again.")
                 return
             }

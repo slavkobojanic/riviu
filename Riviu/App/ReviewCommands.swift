@@ -39,10 +39,10 @@ struct ReviewCommands: Commands {
                 .keyboardShortcut(.upArrow, modifiers: [.command, .option])
             Button("Next Tour Stop") { workspace.advanceTour(by: 1) }
                 .keyboardShortcut(.rightArrow, modifiers: [.command, .option])
-                .disabled(workspace.tourPosition == nil)
+                .disabled(!workspace.isTouring)
             Button("Previous Tour Stop") { workspace.advanceTour(by: -1) }
                 .keyboardShortcut(.leftArrow, modifiers: [.command, .option])
-                .disabled(workspace.tourPosition == nil)
+                .disabled(!workspace.isTouring)
             Button("Next Conversation") { workspace.revealAdjacentThread(offset: 1) }
                 .keyboardShortcut("]", modifiers: [.command, .option])
                 .disabled(workspace.unresolvedThreads.isEmpty)

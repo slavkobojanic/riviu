@@ -40,12 +40,6 @@ struct ReviewLocation: Equatable {
     let filePath: String?
 }
 
-/// A chapter and stop within it, both 0-based.
-struct TourPosition: Equatable {
-    let chapter: Int
-    let stop: Int
-}
-
 /// What changed since you last reviewed the pull request.
 struct SinceLastReview {
     /// The commit your last review was on.
@@ -89,8 +83,10 @@ final class ReviewWorkspace {
         didSet { rebuildRows() }
     }
 
-    /// Where the guided tour is, or nil when not touring.
-    private(set) var tourPosition: TourPosition?
+    /// The guided tour card in focus, or nil when not touring. One past the last stop is the closing card.
+    private(set) var tourCardIndex: Int?
+    /// True while looking at a tour stop in the diff, with a button back to the tour.
+    private(set) var isTourPaused = false
 
     /// Collapses hunks that only move, rename or reformat code.
     var hidesCosmeticChanges = false {
@@ -224,7 +220,8 @@ final class ReviewWorkspace {
         syntaxByPath = [:]
         structuralChangesByPath = [:]
         threads = []
-        tourPosition = nil
+        tourCardIndex = nil
+        isTourPaused = false
         sinceLastReview = nil
         showsChangesSinceLastReview = false
         checkRuns = []
@@ -249,12 +246,14 @@ final class ReviewWorkspace {
     // MARK: - Navigation
 
     func showOverview() {
+        pauseTourIfTouring()
         navigating { showsOverview = true }
     }
 
     /// Selects a file only if it's in the open pull request (folders in the sidebar are ignored).
     func selectFile(at path: String?) {
         guard let path, visibleFile(at: path) != nil else { return }
+        pauseTourIfTouring()
         navigating {
             selectedFilePath = path
             showsOverview = false
@@ -613,40 +612,51 @@ final class ReviewWorkspace {
         pullRequest.flatMap(aiReviews.tour)
     }
 
+    var isTouring: Bool { tourCardIndex != nil }
+
+    /// The stop in focus, or nil on the closing card.
     var currentTourStop: TourStop? {
-        guard let tour, let tourPosition else { return nil }
-        return tour.chapters[tourPosition.chapter].stops[tourPosition.stop]
+        guard let tour, let tourCardIndex, tour.stops.indices.contains(tourCardIndex) else { return nil }
+        return tour.stops[tourCardIndex]
     }
 
-    func startTour(atChapter chapter: Int = 0) {
-        guard let tour, tour.chapters.indices.contains(chapter) else { return }
+    func startTour(at index: Int = 0) {
+        guard tour != nil else { return }
         setShowsChangesSinceLastReview(false)
-        tourPosition = TourPosition(chapter: chapter, stop: 0)
-        revealCurrentTourStop()
+        isTourPaused = false
+        focusTourCard(index)
     }
 
     func endTour() {
-        tourPosition = nil
+        tourCardIndex = nil
+        isTourPaused = false
     }
 
-    /// Moves to the next or previous stop, crossing into the next or previous chapter.
+    /// The tour's stops, then the closing card.
+    func focusTourCard(_ index: Int) {
+        guard let tour else { return }
+        tourCardIndex = min(max(index, 0), tour.stops.count)
+    }
+
     func advanceTour(by offset: Int) {
-        guard let tour, let position = tourPosition else { return }
-        let flat = tour.chapters.indices.flatMap { chapter in tour.chapters[chapter].stops.indices.map { TourPosition(chapter: chapter, stop: $0) } }
-        guard let index = flat.firstIndex(of: position), flat.indices.contains(index + offset) else { return }
-        tourPosition = flat[index + offset]
-        revealCurrentTourStop()
+        guard let tourCardIndex else { return }
+        focusTourCard(tourCardIndex + offset)
     }
 
-    /// Stop number (1-based) out of the whole tour, for "Stop 3 of 12".
-    var tourStopNumber: Int? {
-        guard let tour, let position = tourPosition else { return nil }
-        return tour.chapters.prefix(position.chapter).reduce(0) { $0 + $1.stops.count } + position.stop + 1
-    }
-
-    private func revealCurrentTourStop() {
+    /// Shows the focused stop's lines in the diff, with a way back to the tour.
+    func openCurrentTourStop() {
         guard let stop = currentTourStop else { return }
-        reveal(lineIndex: stop.lineIndex, on: stop.side, inFileAt: stop.filePath)
+        isTourPaused = true
+        reveal(lineIndex: stop.lines.lowerBound - 1, on: stop.side, inFileAt: stop.filePath)
+    }
+
+    func returnToTour() {
+        isTourPaused = false
+    }
+
+    /// Going to a file or the overview during a tour shows it, keeping the tour to come back to.
+    private func pauseTourIfTouring() {
+        if isTouring { isTourPaused = true }
     }
 
     // MARK: - Code navigation

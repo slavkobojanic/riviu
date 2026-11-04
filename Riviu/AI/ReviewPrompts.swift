@@ -133,10 +133,11 @@ enum ReviewPrompts {
     }
 
     /// Asks for a reading order of the pull request's hunks, in chapters.
-    static func tourRequest(pullRequest: PullRequest, hunks: TourHunks) -> AIRequest {
+    static func tourRequest(pullRequest: PullRequest) -> AIRequest {
         let system = """
-        You plan a guided tour of a pull request for a code reviewer, so they read the changes in the order that makes \
-        them easiest to understand. Do not use tools.
+        You plan a short guided tour of a pull request for a code reviewer: the few places they must read, in the \
+        order that makes the change easiest to understand. Lines in the diffs are numbered ("+ 12 |" is line 12 of \
+        the new file, "- 12 |" line 12 of the old file). Do not use tools.
 
         \(TourReport.formatInstructions)
         """
@@ -144,8 +145,8 @@ enum ReviewPrompts {
         Pull request \(pullRequest.reference.id): \(pullRequest.title)
         Description: \(pullRequest.summary.isEmpty ? "(none)" : String(pullRequest.summary.prefix(2_000)))
 
-        Hunks:
-        \(hunks.listing.prefix(maxDiffCharacters))
+        Diffs:
+        \(diffs(for: pullRequest, putFirst: nil, numbered: true))
         """
         return AIRequest(system: system, messages: [AIMessage(role: .user, text: question)])
     }
