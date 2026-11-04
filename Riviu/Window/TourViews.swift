@@ -8,8 +8,9 @@ struct TourSection: View {
     let pullRequest: PullRequest
     let workspace: ReviewWorkspace
     let aiReviews: AIReviewStore
-    /// The stops start as a stack of cards, like grouped notifications; pressing it lays them all out.
+    /// Long tours show their first few stops until "Show All" is pressed.
     @State private var isExpanded = false
+    private static let collapsedCount = 3
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -19,14 +20,9 @@ struct TourSection: View {
                     .font(.title3.weight(.semibold))
                 Spacer()
                 if let tour = workspace.tour {
-                    if isExpanded && tour.stops.count > 1 {
-                        Button("Show Less") { setExpanded(false) }
-                            .buttonStyle(.borderless)
-                    } else {
-                        Text("\(tour.stops.count) \(tour.stops.count == 1 ? "stop" : "stops")")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+                    Text("\(tour.stops.count) \(tour.stops.count == 1 ? "stop" : "stops")")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     Button("Start Tour", systemImage: "play.fill") { workspace.startTour() }
                         .buttonStyle(.bordered)
                 }
@@ -52,29 +48,40 @@ struct TourSection: View {
         }
     }
 
-    /// All the stops when expanded. Otherwise the first one, with the edges of the next two peeking out below it.
+    /// The stops as rows in one card, like a grouped list in Settings. A long tour shows its first few, with a row
+    /// at the end to show the rest.
     private func stops(of tour: ReviewTour) -> some View {
-        let isStacked = !isExpanded && tour.stops.count > 1
-        return VStack(spacing: isStacked ? 0 : 8) {
-            ForEach(Array(tour.stops.enumerated()), id: \.offset) { index, stop in
-                let depth = isStacked ? index : 0
-                StopRow(number: index + 1, stop: stop, isBehind: depth > 0) {
-                    if isStacked {
-                        setExpanded(true)
-                    } else {
-                        workspace.startTour(at: index)
-                    }
+        // Hiding a single stop isn't worth the extra row.
+        let canCollapse = tour.stops.count > Self.collapsedCount + 1
+        let shownCount = isExpanded || !canCollapse ? tour.stops.count : Self.collapsedCount
+        return VStack(spacing: 0) {
+            ForEach(0..<shownCount, id: \.self) { index in
+                if index > 0 {
+                    Divider()
+                        .padding(.leading, StopRow.textInset)
                 }
-                // A card behind the first shows only its bottom edge, a little narrower each time.
-                .frame(height: depth == 0 ? nil : (depth <= 2 ? 7 : 0), alignment: .bottom)
-                .modifier(PeekClip(isOn: depth > 0))
-                .padding(.horizontal, CGFloat(min(depth, 2)) * 10)
-                .opacity(depth > 2 ? 0 : 1)
-                .zIndex(Double(-index))
-                .allowsHitTesting(depth == 0)
+                StopRow(number: index + 1, stop: tour.stops[index]) { workspace.startTour(at: index) }
+            }
+            if canCollapse {
+                Divider()
+                Button { setExpanded(!isExpanded) } label: {
+                    HStack(spacing: 4) {
+                        Text(isExpanded ? "Show Fewer" : "Show All \(tour.stops.count) Stops")
+                        Image(systemName: "chevron.down")
+                            .font(.caption.weight(.semibold))
+                            .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                    }
+                    .foregroundStyle(.tint)
+                    .padding(.leading, StopRow.textInset)
+                    .padding(.vertical, 9)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
             }
         }
-        .help(isStacked ? "Show all \(tour.stops.count) stops" : "")
+        .clipShape(.rect(cornerRadius: 14))
+        .cardBackground()
     }
 
     private func setExpanded(_ expanded: Bool) {
@@ -91,28 +98,14 @@ struct TourSection: View {
     }
 }
 
-/// Cuts a card in the stack down to its bottom edge, leaving room below for its shadow.
-private struct PeekClip: ViewModifier {
-    let isOn: Bool
-
-    func body(content: Content) -> some View {
-        if isOn {
-            content.mask {
-                Rectangle().padding(.horizontal, -8).padding(.bottom, -6)
-            }
-        } else {
-            content
-        }
-    }
-}
-
 private struct StopRow: View {
     let number: Int
     let stop: TourStop
-    /// Tucked behind another card in the stack: only its edge shows.
-    var isBehind = false
     let action: () -> Void
     @State private var isHovered = false
+
+    /// Where the title starts, past the number. Dividers between rows start here too.
+    static let textInset: CGFloat = 12 + 22 + 12
 
     var body: some View {
         Button(action: action) {
@@ -133,17 +126,12 @@ private struct StopRow: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
-            .opacity(isBehind ? 0 : 1)
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background {
-                let shape = RoundedRectangle(cornerRadius: 12)
-                shape.fill(Color(nsColor: .controlBackgroundColor))
-                    .overlay { shape.fill(.fill.opacity(isBehind ? 0.6 : (isHovered ? 0.7 : 0.35))) }
-                    // Only the card's shape casts the shadow, not its text.
-                    .shadow(color: .black.opacity(0.1), radius: 3, y: 1)
+                Rectangle().fill(isHovered ? AnyShapeStyle(.fill.quaternary) : AnyShapeStyle(.clear))
             }
-            .contentShape(.rect(cornerRadius: 12))
+            .contentShape(.rect)
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
