@@ -43,3 +43,10 @@ struct NumberedPatchTests {
         #expect(NumberedPatch.make(from: patch) == "@@ -1 +1 @@\n- 1 | a\n\\ No newline at end of file\n+ 1 | b")
     }
 }
+
+struct HunkRangeTests {
+    @Test func readsEachHunksNewLines() {
+        let patch = "@@ -1,3 +1,4 @@ func a()\n a\n+b\n c\n d\n@@ -20 +21 @@\n-x\n+y\n@@ -30,2 +32,0 @@\n-gone\n-gone"
+        #expect(NumberedPatch.newLineRanges(in: patch) == [1...4, 21...21])
+    }
+}

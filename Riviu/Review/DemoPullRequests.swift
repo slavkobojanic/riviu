@@ -108,7 +108,8 @@ nonisolated enum DemoPullRequests {
         return file.findings.enumerated().compactMap { number, finding in
             guard let line = diff.lines(on: finding.side).firstIndex(where: { $0.contains(finding.match) }) else { return nil }
             return ReviewFinding(id: "\(file.path)#\(number)", filePath: file.path, side: finding.side, lineIndex: line,
-                                 title: finding.title, body: finding.body, severity: finding.severity)
+                                 title: finding.title, body: finding.body, severity: finding.severity,
+                                 suggestion: file.suggestions[finding.match])
         }
     }
 }

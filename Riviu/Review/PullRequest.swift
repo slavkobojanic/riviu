@@ -88,6 +88,12 @@ nonisolated struct ReviewFinding: Identifiable, Sendable, Codable {
     let title: String
     let body: String
     let severity: Severity
+    /// The last line, for a finding that spans several lines.
+    var endLineIndex: Int?
+    /// Code that replaces `lines`, posted as a GitHub suggestion the author can commit.
+    var suggestion: String?
+
+    var lines: ClosedRange<Int> { lineIndex...max(lineIndex, endLineIndex ?? lineIndex) }
 }
 
 /// A review comment the user is writing or has written, on one or more lines.

@@ -8,6 +8,8 @@ nonisolated struct DemoFile {
     var base: String
     var edits: [(String, String)] = []
     var findings: [(match: String, side: DiffSide, title: String, body: String, severity: ReviewFinding.Severity)] = []
+    /// Suggested fixes for single-line findings, by the finding's `match`.
+    var suggestions: [String: String] = [:]
 
     var head: String {
         switch status {
@@ -538,6 +540,9 @@ nonisolated enum DemoFiles {
             ("http.Error(w, \"queue full\"", .head, "Dropped events are not logged",
              "When the queue is full the event is rejected with 503 but nothing is logged or counted, so backpressure is invisible in production.",
              .medium),
+        ],
+        suggestions: [
+            "http.Error(w, \"queue full\"": "\t\tlog.Printf(\"queue full, dropped %s #%d\", event.Action, event.Number)\n\t\thttp.Error(w, \"queue full\", http.StatusServiceUnavailable)",
         ]
     )
 

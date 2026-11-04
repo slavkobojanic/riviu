@@ -158,7 +158,7 @@ private struct FindingRow: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(finding.title)
                         .font(.headline)
-                    Text("\((finding.filePath as NSString).lastPathComponent) · \(describeLines(finding.lineIndex...finding.lineIndex, on: finding.side))")
+                    Text("\((finding.filePath as NSString).lastPathComponent) · \(describeLines(finding.lines, on: finding.side))")
                         .font(.caption.monospaced())
                     InlineText(markdown: finding.body)
                         .font(.callout)

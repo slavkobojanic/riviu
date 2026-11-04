@@ -35,6 +35,9 @@ struct RiviuApp: App {
             workspace.open(reference)
         }
         watcher.start()
+        #if DEBUG
+        DebugLaunch.run(workspace: workspace)
+        #endif
     }
 
     var body: some Scene {

@@ -16,13 +16,17 @@ public struct ReviewReport: Decodable, Sendable, Equatable {
         public let file: String
         /// 1-based, in the old file for `side == .old`, otherwise in the new file.
         public let line: Int
+        /// The last line of a finding that spans several lines.
+        public let endLine: Int?
         public let side: Side
         public let severity: Level
         public let title: String
         public let body: String
+        /// Replacement code for lines `line...endLine` of the new file, posted as a GitHub suggestion.
+        public let suggestion: String?
 
         private enum CodingKeys: String, CodingKey {
-            case file, line, side, severity, title, body
+            case file, line, endLine, side, severity, title, body, suggestion
         }
 
         public init(from decoder: Decoder) throws {
@@ -33,6 +37,8 @@ public struct ReviewReport: Decodable, Sendable, Equatable {
             severity = try container.decode(Level.self, forKey: .severity)
             title = try container.decode(String.self, forKey: .title)
             body = try container.decode(String.self, forKey: .body)
+            endLine = try container.decodeIfPresent(Int.self, forKey: .endLine)
+            suggestion = try container.decodeIfPresent(String.self, forKey: .suggestion)
         }
     }
 
@@ -63,15 +69,18 @@ public struct ReviewReport: Decodable, Sendable, Equatable {
         {
           "file": "path/of/the/file",
           "line": 42,
+          "endLine": 44,
           "side": "new" | "old",
           "severity": "low" | "medium" | "high",
           "title": "Short headline",
-          "body": "Markdown: what is wrong and how to fix it. At most 60 words."
+          "body": "Markdown: what is wrong and how to fix it. At most 60 words.",
+          "suggestion": "The fixed code that replaces lines line through endLine, exactly as it should read."
         }
       ]
     }
     Lines in the diffs are numbered. Use "side": "old" only for a line starting with "-"; its number is in the old file.
-    Every other line is numbered in the new file. Only report real problems: bugs, security issues, missing tests for risky code,
+    Every other line is numbered in the new file. "endLine" is optional, for a finding that spans several lines.
+    Add "suggestion" only for a small, certain fix to new-file lines from one hunk; keep the original indentation. Only report real problems: bugs, security issues, missing tests for risky code,
     and confusing code. Return an empty findings list if there are none.
     """
 

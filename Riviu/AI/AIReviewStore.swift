@@ -133,11 +133,23 @@ extension AIReview {
         summary = report.summary
         risk = ReviewFinding.Severity(report.risk)
         findings = report.findings.enumerated().compactMap { number, finding in
-            guard pullRequest.file(at: finding.file) != nil, finding.line > 0 else { return nil }
-            return ReviewFinding(id: "\(pullRequest.headSHA):\(number)", filePath: finding.file,
-                                 side: finding.side == .old ? .base : .head, lineIndex: finding.line - 1,
-                                 title: finding.title, body: finding.body, severity: ReviewFinding.Severity(finding.severity))
+            guard let file = pullRequest.file(at: finding.file), finding.line > 0 else { return nil }
+            var result = ReviewFinding(id: "\(pullRequest.headSHA):\(number)", filePath: finding.file,
+                                       side: finding.side == .old ? .base : .head, lineIndex: finding.line - 1,
+                                       title: finding.title, body: finding.body, severity: ReviewFinding.Severity(finding.severity))
+            if Self.canSuggest(finding, in: file) {
+                result.endLineIndex = (finding.endLine ?? finding.line) - 1
+                result.suggestion = finding.suggestion
+            }
+            return result
         }
+    }
+
+    /// GitHub only takes a suggestion on new-file lines inside one hunk, so anything else is dropped.
+    private static func canSuggest(_ finding: ReviewReport.Finding, in file: ChangedFile) -> Bool {
+        guard finding.suggestion != nil, finding.side == .new, let patch = file.patch else { return false }
+        let lines = finding.line...max(finding.line, finding.endLine ?? finding.line)
+        return NumberedPatch.newLineRanges(in: patch).contains { $0.contains(lines.lowerBound) && $0.contains(lines.upperBound) }
     }
 }
 

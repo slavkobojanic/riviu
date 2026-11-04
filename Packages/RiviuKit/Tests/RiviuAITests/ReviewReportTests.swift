@@ -38,3 +38,12 @@ struct ReviewReportTests {
         #expect(throws: ReviewReport.ParseError.self) { try ReviewReport.parse(#"{"risk": "low", "findings": []}"#) }
     }
 }
+
+struct ReviewReportSuggestionTests {
+    @Test func readsAnOptionalSuggestionAndEndLine() throws {
+        let reply = #"{"summary": "s", "risk": "low", "findings": [{"file": "a", "line": 3, "endLine": 4, "severity": "low", "title": "t", "body": "b", "suggestion": "let x = 1"}]}"#
+        let finding = try ReviewReport.parse(reply).findings[0]
+        #expect(finding.endLine == 4)
+        #expect(finding.suggestion == "let x = 1")
+    }
+}

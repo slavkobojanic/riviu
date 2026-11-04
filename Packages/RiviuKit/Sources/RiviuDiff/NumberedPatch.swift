@@ -37,6 +37,16 @@ public enum NumberedPatch {
         return output.joined(separator: "\n")
     }
 
+    /// The new-file lines (1-based) each hunk covers. GitHub only accepts comments on these lines.
+    public static func newLineRanges(in patch: String) -> [ClosedRange<Int>] {
+        patch.split(separator: "\n").compactMap { line in
+            guard let match = line.wholeMatch(of: #/@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@.*/#),
+                  let start = Int(match.1) else { return nil }
+            let count = match.2.flatMap { Int($0) } ?? 1
+            return count > 0 ? start...(start + count - 1) : nil
+        }
+    }
+
     /// The first old and new line numbers from a hunk header like "@@ -10,3 +12,4 @@".
     private static func hunkStarts(in line: Substring) -> (old: Int, new: Int)? {
         guard let match = line.wholeMatch(of: #/@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@.*/#),

@@ -354,13 +354,18 @@ final class ReviewWorkspace {
         rebuildRows()
     }
 
+    /// Opens a comment with the finding's text, and its suggested fix as a GitHub suggestion.
     func turnFindingIntoComment(_ finding: ReviewFinding) {
-        guard let diff = selectedFileDiff, diff.path == finding.filePath,
-              diff.lines(on: finding.side).indices.contains(finding.lineIndex) else { return }
-        let code = diff.lines(on: finding.side)[finding.lineIndex]
+        guard let diff = selectedFileDiff, diff.path == finding.filePath else { return }
+        let fileLines = diff.lines(on: finding.side)
+        guard fileLines.indices.contains(finding.lines.upperBound) else { return }
+        var body = "**\(finding.title)**\n\n\(finding.body)"
+        if let suggestion = finding.suggestion {
+            body += "\n\n```suggestion\n\(suggestion)\n```"
+        }
+        let code = fileLines[finding.lines].joined(separator: "\n")
         dismissFinding(finding)
-        startComment(on: CodeTarget(filePath: diff.path, side: finding.side, lines: finding.lineIndex...finding.lineIndex, code: code),
-                     body: "**\(finding.title)**\n\n\(finding.body)")
+        startComment(on: CodeTarget(filePath: diff.path, side: finding.side, lines: finding.lines, code: code), body: body)
     }
 
     // MARK: - Comments
