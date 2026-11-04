@@ -4,8 +4,6 @@ import SwiftUI
 struct AIReviewStatusLabel: View {
     let reference: PullRequestReference
     let aiReviews: AIReviewStore
-    /// Shown when there's no review and none is coming. nil shows nothing.
-    var placeholder: String?
 
     var body: some View {
         Group {
@@ -27,8 +25,6 @@ struct AIReviewStatusLabel: View {
                         SeverityBadge(severity: review.risk, label: "\(review.risk.rawValue) risk")
                         Text(review.findings.count == 1 ? "1 finding" : "\(review.findings.count) findings")
                     }
-                } else if let placeholder {
-                    Label(placeholder, systemImage: "sparkles")
                 }
             }
         }

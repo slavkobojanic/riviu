@@ -259,7 +259,7 @@ private struct PullRequestHeader: View {
                     .font(.caption)
                     .lineLimit(1)
                 HStack(spacing: 14) {
-                    AIReviewStatusLabel(reference: pullRequest.reference, aiReviews: aiReviews, placeholder: "Overview & AI summary")
+                    AIReviewStatusLabel(reference: pullRequest.reference, aiReviews: aiReviews)
                     ChecksSummaryLabel(checkRuns: workspace.checkRuns)
                     Spacer(minLength: 4)
                     Image(systemName: "chevron.right")
