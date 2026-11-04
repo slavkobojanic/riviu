@@ -159,6 +159,9 @@ private struct FileRow: View {
                     .foregroundStyle(.purple)
                     .help("AI findings")
             }
+            Text(lineCounts)
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
             if workspace.isChangedSinceViewed(file.path) {
                 Image(systemName: "arrow.triangle.2.circlepath")
                     .foregroundStyle(.statusOrange)
@@ -184,6 +187,14 @@ private struct FileRow: View {
         case .json: "curlybraces"
         default: "doc.text"
         }
+    }
+
+    /// Like "+12 −3", leaving out a side with no lines.
+    private var lineCounts: String {
+        var parts: [String] = []
+        if file.additions > 0 { parts.append("+\(file.additions)") }
+        if file.deletions > 0 { parts.append("−\(file.deletions)") }
+        return parts.joined(separator: " ")
     }
 
     private var statusLetter: String {
@@ -223,7 +234,7 @@ private struct PullRequestHeader: View {
 
     var body: some View {
         Button { workspace.showOverview() } label: {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 6) {
                     Text("\(pullRequest.reference.repository) #\(String(pullRequest.number))")
                         .fontWeight(.semibold)
@@ -246,7 +257,6 @@ private struct PullRequestHeader: View {
                     Image(systemName: "chevron.right")
                         .font(.caption.weight(.semibold))
                 }
-                .padding(.top, 6)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12)
