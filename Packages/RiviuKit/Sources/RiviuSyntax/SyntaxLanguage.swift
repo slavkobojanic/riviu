@@ -230,8 +230,12 @@ final class SyntaxLanguageRegistry: Sendable {
         let bundle = "TreeSitter\(package)_TreeSitter\(target ?? package).bundle"
         let candidates = [Bundle.main.resourceURL, Bundle.main.bundleURL,
                           Bundle(for: SyntaxLanguageRegistry.self).bundleURL.deletingLastPathComponent()].compactMap(\.self)
-        let urls = candidates.map { $0.appending(path: "\(bundle)/Contents/Resources/queries", directoryHint: .isDirectory) }
-        return urls.first { FileManager.default.fileExists(atPath: $0.path) } ?? urls[0]
+        // Bundle finds the resources whichever way the bundle is laid out: Xcode and newer SwiftPM put them in
+        // Contents/Resources, older SwiftPM right inside the bundle.
+        let urls = candidates.compactMap { Bundle(url: $0.appending(path: bundle))?.resourceURL }
+            .map { $0.appending(path: "queries", directoryHint: .isDirectory) }
+        return urls.first { FileManager.default.fileExists(atPath: $0.path) }
+            ?? candidates[0].appending(path: "\(bundle)/Contents/Resources/queries", directoryHint: .isDirectory)
     }
 
     /// tree-sitter-swift's tags.scm only lists definitions; Riviu also needs calls for the hot path.
