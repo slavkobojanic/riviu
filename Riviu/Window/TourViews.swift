@@ -190,7 +190,8 @@ struct TourCarousel: View {
         Group {
             if tour.stops.indices.contains(index) {
                 TourStopCard(stop: tour.stops[index], number: index + 1, total: tour.stops.count, isFocused: isFocused,
-                             theme: settings.themeFamily.theme(dark: colorScheme == .dark), font: settings.editorFont) {
+                             theme: settings.themeFamily.theme(dark: colorScheme == .dark), font: settings.editorFont,
+                             lineSpacing: settings.lineSpacing) {
                     workspace.openCurrentTourStop()
                 }
             } else {
@@ -303,6 +304,7 @@ private struct TourStopCard: View {
     let isFocused: Bool
     let theme: EditorTheme
     let font: NSFont
+    let lineSpacing: LineSpacing
     let open: () -> Void
 
     var body: some View {
@@ -318,7 +320,7 @@ private struct TourStopCard: View {
             Text(markdown: stop.explanation)
                 .font(.body)
                 .fixedSize(horizontal: false, vertical: true)
-            TourExcerptView(stop: stop, theme: theme, font: font, open: open)
+            TourExcerptView(stop: stop, theme: theme, font: font, lineSpacing: lineSpacing, open: open)
         }
         .padding(22)
         .cardBackground(isFocused: isFocused)
@@ -330,6 +332,7 @@ private struct TourExcerptView: View {
     let stop: TourStop
     let theme: EditorTheme
     let font: NSFont
+    let lineSpacing: LineSpacing
     let open: () -> Void
 
     /// Each line with its syntax colors, once parsed.
@@ -355,24 +358,31 @@ private struct TourExcerptView: View {
             Divider()
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(stop.excerpt.enumerated()), id: \.offset) { index, line in
-                    ExcerptLine(line: line, text: highlighted.indices.contains(index) ? highlighted[index] : AttributedString(line.text),
-                                theme: theme)
+                    ExcerptLine(line: line, text: highlighted.indices.contains(index) ? highlighted[index] : AttributedString(lines[index]),
+                                theme: theme, font: font, extraHeight: lineSpacing.extraHeight)
                 }
             }
             .font(Font(font))
             .padding(.vertical, 4)
-            .background(Color(nsColor: theme.background))
         }
-        .background(.fill.quaternary)
+        .background(Color(nsColor: theme.background))
         .clipShape(.rect(cornerRadius: 10))
         .task(id: "\(stop.filePath):\(stop.lines):\(theme.name)") {
             highlighted = await highlight()
         }
     }
 
+    /// The lines without the indentation they all share, so deeply nested code doesn't start halfway across.
+    private var lines: [String] {
+        let texts = stop.excerpt.map(\.text)
+        let indents = texts.filter { !$0.allSatisfy(\.isWhitespace) }.map { $0.prefix { $0 == " " || $0 == "\t" }.count }
+        let shared = indents.min() ?? 0
+        return texts.map { String($0.dropFirst(min(shared, $0.prefix { $0 == " " || $0 == "\t" }.count))) }
+    }
+
     /// Parses just these lines. A few lines out of a file don't always parse perfectly, but they come close.
     private func highlight() async -> [AttributedString] {
-        let lines = stop.excerpt.map(\.text)
+        let lines = lines
         let document = await SyntaxDocument.parse(lines: lines, language: SyntaxLanguage.detect(path: stop.filePath))
         return lines.indices.map { index in
             var text = AttributedString(lines[index])
@@ -394,6 +404,9 @@ private struct ExcerptLine: View {
     let line: PatchExcerpt.Line
     let text: AttributedString
     let theme: EditorTheme
+    let font: NSFont
+    /// The editor's line spacing, so code here is spaced like in the diff.
+    let extraHeight: CGFloat
 
     var body: some View {
         HStack(spacing: 0) {
@@ -403,10 +416,11 @@ private struct ExcerptLine: View {
             Text(marker)
                 .frame(width: 22)
                 .foregroundStyle(Color(nsColor: theme.lineNumber))
-            Text(line.text.isEmpty ? AttributedString(" ") : text)
+            Text(text.characters.isEmpty ? AttributedString(" ") : text)
                 .lineLimit(1)
         }
-        .padding(.vertical, 1)
+        // The same height as a row in the diff.
+        .frame(height: ceil(font.ascender - font.descender + font.leading) + extraHeight)
         .frame(maxWidth: .infinity, alignment: .leading)
         // A plain rectangle: a bare color here takes the rounded shape of the card around it.
         .background { Rectangle().fill(tint) }
@@ -439,9 +453,6 @@ private struct TourEndCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("THE REST")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
             Text("That's the tour")
                 .font(.title2.weight(.semibold))
             if !tour.rest.isEmpty {
@@ -488,10 +499,14 @@ struct BackToTourBar: View {
 }
 
 private extension View {
+    /// The shadow goes on the card's shape only: on the card itself it would also shadow everything inside it.
     func cardBackground(isFocused: Bool) -> some View {
-        background(.background, in: .rect(cornerRadius: 20))
-            .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(.separator))
-            .shadow(color: .black.opacity(isFocused ? 0.14 : 0.05), radius: isFocused ? 20 : 6, y: 6)
+        background {
+            RoundedRectangle(cornerRadius: 20)
+                .fill(.background)
+                .shadow(color: .black.opacity(isFocused ? 0.14 : 0.05), radius: isFocused ? 20 : 6, y: 6)
+        }
+        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(.separator))
     }
 }
 

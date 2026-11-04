@@ -278,7 +278,7 @@ private struct PullRequestHeader: View {
     }
 
     private var background: AnyShapeStyle {
-        if workspace.showsOverview { return AnyShapeStyle(Color.accentColor.opacity(0.2)) }
+        if workspace.showsOverview { return AnyShapeStyle(.fill.secondary) }
         if isHovered { return AnyShapeStyle(.fill.tertiary) }
         return AnyShapeStyle(.clear)
     }
