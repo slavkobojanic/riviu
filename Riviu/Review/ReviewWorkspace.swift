@@ -569,7 +569,7 @@ final class ReviewWorkspace {
 
     /// Loads which files you've viewed and the existing conversations.
     private func loadGitHubState(for reference: PullRequestReference) {
-        guard !reference.isDemo, let client = account.client else { return }
+        guard let client = account.client else { return }
         Task {
             async let viewedFiles = client.viewedFiles(repository: reference.repository, number: reference.number)
             async let loadedThreads = client.reviewThreads(repository: reference.repository, number: reference.number)
@@ -596,7 +596,7 @@ final class ReviewWorkspace {
     }
 
     private func reloadThreads() async {
-        guard let reference = pullRequest?.reference, !reference.isDemo, let client = account.client else { return }
+        guard let reference = pullRequest?.reference, let client = account.client else { return }
         do {
             let loaded = try await client.reviewThreads(repository: reference.repository, number: reference.number)
             guard pullRequest?.reference == reference else { return }
@@ -718,11 +718,6 @@ final class ReviewWorkspace {
 
     private func loadChecks(for pullRequest: PullRequest) {
         let reference = pullRequest.reference
-        if reference.isDemo {
-            checkRuns = DemoPullRequests.checkRuns(number: reference.number)
-            annotations = DemoPullRequests.annotations(number: reference.number)
-            return
-        }
         guard let client = account.client else { return }
         Task {
             guard let runs = try? await client.checkRuns(repository: reference.repository, commit: pullRequest.headSHA),
@@ -971,12 +966,12 @@ final class ReviewWorkspace {
     // MARK: - Submitting a review
 
     var canSubmitReview: Bool {
-        pullRequest?.reference.isDemo == false && account.isSignedIn
+        pullRequest != nil && account.isSignedIn
     }
 
     /// Posts the review with every pending comment, then marks those comments as submitted.
     func submitReview(event: GitHubReviewSubmission.Event, body: String) async throws {
-        guard let pullRequest, let client = account.client, !pullRequest.reference.isDemo else {
+        guard let pullRequest, let client = account.client else {
             throw PullRequestLoader.LoadError.notSignedIn
         }
         let pending = pendingComments

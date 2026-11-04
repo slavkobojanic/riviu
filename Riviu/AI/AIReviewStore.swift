@@ -54,14 +54,11 @@ final class AIReviewStore {
     @ObservationIgnored private let fileURL = URL.applicationSupportDirectory.appending(path: "Riviu/ai-reviews.json")
     @ObservationIgnored private let toursURL = URL.applicationSupportDirectory.appending(path: "Riviu/ai-tours.json")
 
-    init(settings: AppSettings, account: GitHubAccount, rules: ReviewRuleStore, demoReviews: [AIReview]) {
+    init(settings: AppSettings, account: GitHubAccount, rules: ReviewRuleStore) {
         self.settings = settings
         self.account = account
         self.rules = rules
         load()
-        for review in demoReviews {
-            reviews[review.pullRequest] = review
-        }
     }
 
     func review(for reference: PullRequestReference) -> AIReview? {
@@ -134,7 +131,7 @@ final class AIReviewStore {
 
     /// The last review's open findings and what changed since, when the pull request has new commits.
     private func previousReview(for pullRequest: PullRequest) async -> PreviousReview? {
-        guard let earlier = reviews[pullRequest.reference], earlier.headSHA != pullRequest.headSHA, !pullRequest.reference.isDemo,
+        guard let earlier = reviews[pullRequest.reference], earlier.headSHA != pullRequest.headSHA,
               let client = account.client else { return nil }
         let open = earlier.findings.filter { !$0.isAddressed }
         guard !open.isEmpty,
@@ -201,8 +198,7 @@ final class AIReviewStore {
     // MARK: - Saving
 
     private func saveTours() {
-        let saved = tours.values.filter { !$0.pullRequest.isDemo }
-        try? JSONEncoder().encode(Array(saved)).write(to: toursURL, options: .atomic)
+        try? JSONEncoder().encode(Array(tours.values)).write(to: toursURL, options: .atomic)
     }
 
     private func load() {
@@ -219,7 +215,7 @@ final class AIReviewStore {
     }
 
     private func save() {
-        let saved = reviews.values.filter { !$0.pullRequest.isDemo }
+        let saved = reviews.values
         do {
             try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
             try JSONEncoder().encode(Array(saved)).write(to: fileURL, options: .atomic)

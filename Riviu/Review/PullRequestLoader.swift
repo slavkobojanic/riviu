@@ -12,16 +12,14 @@ nonisolated struct RepositoryGuideline: Sendable {
     let text: String
 }
 
-/// Fetches pull requests and file contents, from GitHub or from the built-in demos.
+/// Fetches pull requests and file contents from GitHub.
 nonisolated struct PullRequestLoader: Sendable {
     enum LoadError: LocalizedError {
         case notSignedIn
-        case unknownDemo
 
         var errorDescription: String? {
             switch self {
             case .notSignedIn: "Sign in to GitHub to open this pull request."
-            case .unknownDemo: "That demo pull request doesn't exist."
             }
         }
     }
@@ -30,10 +28,6 @@ nonisolated struct PullRequestLoader: Sendable {
     let client: GitHubClient?
 
     func pullRequest(_ reference: PullRequestReference) async throws -> PullRequest {
-        if reference.isDemo {
-            guard let demo = DemoPullRequests.pullRequest(number: reference.number) else { throw LoadError.unknownDemo }
-            return demo
-        }
         guard let client else { throw LoadError.notSignedIn }
 
         async let details = client.pullRequest(repository: reference.repository, number: reference.number)
@@ -57,10 +51,6 @@ nonisolated struct PullRequestLoader: Sendable {
 
     /// Downloads both versions of a file and diffs them. `baseSHA` defaults to the pull request's base.
     func content(of file: ChangedFile, in pullRequest: PullRequest, baseSHA: String? = nil) async throws -> FileContent {
-        if pullRequest.reference.isDemo {
-            guard let diff = DemoPullRequests.fileDiff(at: file.path) else { return .failed("Missing demo file.") }
-            return .loaded(diff)
-        }
         guard let client else { throw LoadError.notSignedIn }
         let repository = pullRequest.reference.repository
 
@@ -82,7 +72,7 @@ nonisolated struct PullRequestLoader: Sendable {
 
     /// The repository's instructions for AI tools, at the reviewed commit. Missing files are skipped.
     func repositoryGuidelines(for pullRequest: PullRequest) async -> [RepositoryGuideline] {
-        guard let client, !pullRequest.reference.isDemo else { return [] }
+        guard let client else { return [] }
         var guidelines: [RepositoryGuideline] = []
         for path in RepositoryGuideline.paths {
             guard let data = try? await client.fileContents(repository: pullRequest.reference.repository, path: path,
@@ -97,7 +87,7 @@ nonisolated struct PullRequestLoader: Sendable {
 
     /// Issues the description says it fixes ("Fixes #12"), up to three.
     func linkedIssues(for pullRequest: PullRequest) async -> [GitHubIssue] {
-        guard let client, !pullRequest.reference.isDemo else { return [] }
+        guard let client else { return [] }
         let pattern = #/(?i)\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)/#
         let numbers = pullRequest.summary.matches(of: pattern).compactMap { Int($0.1) }
         var issues: [GitHubIssue] = []

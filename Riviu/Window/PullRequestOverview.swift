@@ -64,7 +64,7 @@ private struct OverviewHeader: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(pullRequest.reference.isDemo ? "Demo #\(String(pullRequest.number))" : pullRequest.reference.id)
+            Text(pullRequest.reference.id)
                 .font(.subheadline.weight(.semibold))
             Text(pullRequest.title)
                 .font(.largeTitle.weight(.bold))

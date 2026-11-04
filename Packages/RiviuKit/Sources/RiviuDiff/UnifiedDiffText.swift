@@ -1,5 +1,5 @@
 /// Renders a file diff as standard unified-diff text ("@@ -10,3 +10,4 @@" hunks), for giving an AI model context
-/// about a change, and as the patch of the built-in demo files.
+/// about a change.
 public enum UnifiedDiffText {
     private struct Line {
         /// "+", "-" or " ".

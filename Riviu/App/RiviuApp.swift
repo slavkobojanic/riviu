@@ -21,7 +21,7 @@ struct RiviuApp: App {
         _account = State(initialValue: account)
         let inbox = PullRequestInbox(account: account)
         let rules = ReviewRuleStore()
-        let aiReviews = AIReviewStore(settings: settings, account: account, rules: rules, demoReviews: DemoPullRequests.reviews)
+        let aiReviews = AIReviewStore(settings: settings, account: account, rules: rules)
         let workspace = ReviewWorkspace(settings: settings, account: account, aiReviews: aiReviews, rules: rules,
                                         codeIndexes: CodeIndexStore(account: account))
         let watcher = ReviewRequestWatcher(account: account, settings: settings, aiReviews: aiReviews, inbox: inbox,

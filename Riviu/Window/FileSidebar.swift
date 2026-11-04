@@ -224,7 +224,7 @@ private struct PullRequestHeader: View {
     var body: some View {
         Button { workspace.showOverview() } label: {
             VStack(alignment: .leading, spacing: 4) {
-                Text("\(pullRequest.reference.isDemo ? "Demo" : pullRequest.reference.repository) #\(String(pullRequest.number)) · \(pullRequest.author)")
+                Text("\(pullRequest.reference.repository) #\(String(pullRequest.number)) · \(pullRequest.author)")
                     .font(.caption.weight(.semibold))
                 Text(pullRequest.title)
                     .font(.headline)

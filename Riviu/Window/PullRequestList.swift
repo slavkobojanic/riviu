@@ -112,20 +112,6 @@ struct PullRequestList: View {
             } header: {
                 Text("Connect GitHub")
             }
-            Section("Demo pull requests") {
-                ForEach(DemoPullRequests.all) { pullRequest in
-                    Button { onOpen(pullRequest.reference) } label: {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(pullRequest.title)
-                                .lineLimit(2)
-                            Text("#\(String(pullRequest.number)) · \(pullRequest.author)")
-                                .font(.caption)
-                            AIReviewStatusLabel(reference: pullRequest.reference, aiReviews: aiReviews)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
         }
         .listStyle(.sidebar)
     }

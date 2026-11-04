@@ -69,7 +69,7 @@ final class CodeIndexStore {
     private func sourceFiles(for pullRequest: PullRequest,
                              fallbackFiles: () async -> [(path: String, text: String)]) async throws -> [(path: String, text: String)] {
         let repository = pullRequest.reference.repository
-        guard !pullRequest.reference.isDemo, let client = account.client,
+        guard let client = account.client,
               let size = try? await client.repositorySize(repository), size <= Self.maxRepositoryKilobytes else {
             return await fallbackFiles()
         }

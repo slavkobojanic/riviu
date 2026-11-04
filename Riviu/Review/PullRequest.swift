@@ -1,15 +1,12 @@
 import Foundation
 import RiviuDiff
 
-/// Identifies a pull request: "owner/name#123", or "demo#482" for the built-in examples.
+/// Identifies a pull request: "owner/name#123".
 nonisolated struct PullRequestReference: Hashable, Codable, Sendable {
-    static let demoRepository = "demo"
-
     let repository: String
     let number: Int
 
     var id: String { "\(repository)#\(number)" }
-    var isDemo: Bool { repository == Self.demoRepository }
 }
 
 /// One file changed by a pull request. Its contents are loaded separately, when it's opened.
