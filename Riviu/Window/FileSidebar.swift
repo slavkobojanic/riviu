@@ -27,9 +27,14 @@ struct FileSidebar: View {
                 PullRequestHeader(pullRequest: pullRequest, workspace: workspace, aiReviews: aiReviews)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 6)
+                if let sinceLastReview = workspace.sinceLastReview {
+                    ChangesPicker(workspace: workspace, sinceLastReview: sinceLastReview)
+                        .padding(.horizontal, 14)
+                        .padding(.bottom, 4)
+                }
                 List(selection: selection) {
                     Section {
-                        ForEach(FileTreeNode.tree(for: pullRequest.files.map(\.path))) { node in
+                        ForEach(FileTreeNode.tree(for: workspace.visibleFiles.map(\.path))) { node in
                             FileTreeRow(node: node, workspace: workspace, expandedFolders: $expandedFolders)
                         }
                     } header: {
@@ -50,6 +55,23 @@ struct FileSidebar: View {
     private var selection: Binding<String?> {
         Binding(get: { workspace.showsOverview ? nil : workspace.selectedFilePath },
                 set: { workspace.selectFile(at: $0) })
+    }
+}
+
+/// All changes, or only what changed since your last review.
+private struct ChangesPicker: View {
+    let workspace: ReviewWorkspace
+    let sinceLastReview: SinceLastReview
+
+    var body: some View {
+        Picker("Show", selection: Binding(get: { workspace.showsChangesSinceLastReview },
+                                          set: { workspace.setShowsChangesSinceLastReview($0) })) {
+            Text("All Changes").tag(false)
+            Text("Since My Review (\(sinceLastReview.files.count))").tag(true)
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .help("Show only the files that changed since your last review, \(sinceLastReview.reviewedAt.formatted(.relative(presentation: .named)))")
     }
 }
 
@@ -85,7 +107,7 @@ private struct FileTreeRow: View {
             } label: {
                 Label(node.name, systemImage: "folder")
             }
-        } else if let file = workspace.pullRequest?.file(at: node.id) {
+        } else if let file = workspace.visibleFile(at: node.id) {
             FileRow(file: file, workspace: workspace)
                 .tag(file.path)
         }

@@ -4,6 +4,8 @@ import RiviuDiff
 
 /// Launch arguments for jumping straight to a pull request while developing, like
 /// `Riviu -debugOpen demo#471 -debugFile services/webhook/handler.go -debugLine 40`.
+/// `-debugReviewer login` pretends to be someone else for "since your last review", and
+/// `-debugSinceReview YES` turns it on.
 enum DebugLaunch {
     static func run(workspace: ReviewWorkspace, account: GitHubAccount) {
         let arguments = UserDefaults.standard
@@ -15,6 +17,12 @@ enum DebugLaunch {
                 try? await Task.sleep(for: .milliseconds(100))
             }
             workspace.open(reference)
+            if arguments.bool(forKey: "debugSinceReview") {
+                while workspace.sinceLastReview == nil {
+                    try? await Task.sleep(for: .milliseconds(100))
+                }
+                workspace.setShowsChangesSinceLastReview(true)
+            }
             guard let path = arguments.string(forKey: "debugFile") else { return }
             while workspace.pullRequest == nil {
                 try? await Task.sleep(for: .milliseconds(100))

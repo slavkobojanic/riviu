@@ -18,6 +18,9 @@ struct PullRequestOverview: View {
                         .font(.callout)
                         .foregroundStyle(.orange)
                 }
+                if let sinceLastReview = workspace.sinceLastReview {
+                    SinceLastReviewBanner(workspace: workspace, sinceLastReview: sinceLastReview)
+                }
                 if !workspace.checkRuns.isEmpty {
                     ChecksSection(workspace: workspace)
                 }
@@ -32,6 +35,9 @@ struct PullRequestOverview: View {
                 }
                 if !workspace.findings.isEmpty {
                     FindingsSection(findings: workspace.findings, workspace: workspace)
+                }
+                if !workspace.addressedFindings.isEmpty {
+                    AddressedFindingsSection(findings: workspace.addressedFindings)
                 }
                 if !workspace.threads.isEmpty {
                     ConversationsSection(workspace: workspace)
@@ -177,6 +183,32 @@ private struct FindingsSection: View {
     }
 }
 
+/// Findings the latest commits fixed, collapsed by default.
+private struct AddressedFindingsSection: View {
+    let findings: [ReviewFinding]
+    @State private var isExpanded = false
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $isExpanded) {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(findings) { finding in
+                    Label {
+                        Text("\(finding.title) · \((finding.filePath as NSString).lastPathComponent)")
+                            .strikethrough()
+                    } icon: {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                    }
+                }
+            }
+            .padding(.top, 6)
+        } label: {
+            Text("Addressed by New Commits (\(findings.count))")
+                .font(.title3.weight(.semibold))
+        }
+    }
+}
+
 /// One finding; clicking it opens the file at its line.
 private struct FindingRow: View {
     let finding: ReviewFinding
@@ -207,6 +239,38 @@ private struct FindingRow: View {
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
         .help("Open \(finding.filePath)")
+    }
+}
+
+/// "3 new commits since your review yesterday", with a way to see only those changes.
+private struct SinceLastReviewBanner: View {
+    let workspace: ReviewWorkspace
+    let sinceLastReview: SinceLastReview
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Image(systemName: "arrow.triangle.2.circlepath")
+            VStack(alignment: .leading, spacing: 4) {
+                Text("\(sinceLastReview.commitCount) new \(sinceLastReview.commitCount == 1 ? "commit" : "commits") since your review \(sinceLastReview.reviewedAt.formatted(.relative(presentation: .named)))")
+                    .font(.headline)
+                Text("\(sinceLastReview.files.count) \(sinceLastReview.files.count == 1 ? "file" : "files") changed")
+                    .font(.callout)
+                if sinceLastReview.isRebased {
+                    Label("The branch was rebased or force-pushed, so these changes may include work from \(workspace.pullRequest?.baseBranch ?? "the base branch").",
+                          systemImage: "exclamationmark.triangle")
+                        .font(.callout)
+                        .foregroundStyle(.orange)
+                }
+            }
+            Spacer()
+            Button(workspace.showsChangesSinceLastReview ? "Show All Changes" : "Review These Changes") {
+                workspace.setShowsChangesSinceLastReview(!workspace.showsChangesSinceLastReview)
+            }
+            .buttonStyle(.glassProminent)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassEffect(.regular.tint(.blue.opacity(0.12)), in: .rect(cornerRadius: 16))
     }
 }
 

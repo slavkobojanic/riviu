@@ -92,6 +92,10 @@ nonisolated struct ReviewFinding: Identifiable, Sendable, Codable {
     var endLineIndex: Int?
     /// Code that replaces `lines`, posted as a GitHub suggestion the author can commit.
     var suggestion: String?
+    /// The commit that fixed it, found when the AI reviews new commits.
+    var addressedInSHA: String?
+
+    var isAddressed: Bool { addressedInSHA != nil }
 
     var lines: ClosedRange<Int> { lineIndex...max(lineIndex, endLineIndex ?? lineIndex) }
 }

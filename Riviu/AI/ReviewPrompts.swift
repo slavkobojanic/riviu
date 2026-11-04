@@ -2,6 +2,12 @@ import RiviuAI
 import RiviuDiff
 import RiviuGitHub
 
+/// An earlier AI review, and what changed since, for reviewing only the new commits.
+struct PreviousReview {
+    let findings: [ReviewFinding]
+    let changedFiles: [ChangedFile]
+}
+
 /// The instructions and context sent to the AI provider.
 enum ReviewPrompts {
     /// Keeps prompts comfortably inside every provider's limits (and the command-line argument limit for CLIs).
@@ -52,7 +58,7 @@ enum ReviewPrompts {
 
     /// Asks for a summary and line-level findings, as JSON that `ReviewReport.parse` reads.
     static func reviewRequest(instructions: String, pullRequest: PullRequest, guidelines: [RepositoryGuideline] = [],
-                              linkedIssues: [GitHubIssue] = []) -> AIRequest {
+                              linkedIssues: [GitHubIssue] = [], previous: PreviousReview? = nil) -> AIRequest {
         var system = instructions
         if !guidelines.isEmpty {
             system += "\n\nThe repository has its own guidelines. Follow them, and flag code that breaks them:"
@@ -61,6 +67,9 @@ enum ReviewPrompts {
             }
         }
         system += "\n\n" + ReviewReport.formatInstructions
+        if previous != nil {
+            system += "\n" + ReviewReport.previousFindingsInstructions
+        }
         var question = [
             "Review pull request \(pullRequest.reference.id): \(pullRequest.title)",
             "Author: \(pullRequest.author) · \(pullRequest.headBranch) → \(pullRequest.baseBranch)",
@@ -68,6 +77,17 @@ enum ReviewPrompts {
         ]
         for issue in linkedIssues {
             question += ["", "Linked issue #\(issue.number): \(issue.title)", String((issue.body ?? "").prefix(3_000))]
+        }
+        if let previous {
+            question += ["", "This pull request was reviewed before. Findings from that review:"]
+            question += previous.findings.enumerated().map { index, finding in
+                "[\(index)] \(finding.filePath) line \(finding.lineIndex + 1): \(finding.title). \(finding.body)"
+            }
+            question += ["", "Changes since that review:"]
+            question += previous.changedFiles.map { file in
+                "--- a/\(file.path)\n+++ b/\(file.path)\n\(NumberedPatch.make(from: file.patch ?? ""))\n"
+            }
+            question += ["", "The whole pull request, for context:"]
         }
         question += ["", "Diffs:", diffs(for: pullRequest, putFirst: nil, numbered: true)]
         return AIRequest(system: system, messages: [AIMessage(role: .user, text: question.joined(separator: "\n"))])

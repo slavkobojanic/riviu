@@ -51,12 +51,12 @@ nonisolated struct PullRequestLoader: Sendable {
             headSHA: pullRequest.head.sha,
             baseSHA: mergeBase,
             webURL: pullRequest.htmlUrl,
-            files: try await files.map(changedFile)
+            files: try await files.map(Self.changedFile)
         )
     }
 
-    /// Downloads both versions of a file and diffs them.
-    func content(of file: ChangedFile, in pullRequest: PullRequest) async throws -> FileContent {
+    /// Downloads both versions of a file and diffs them. `baseSHA` defaults to the pull request's base.
+    func content(of file: ChangedFile, in pullRequest: PullRequest, baseSHA: String? = nil) async throws -> FileContent {
         if pullRequest.reference.isDemo {
             guard let diff = DemoPullRequests.fileDiff(at: file.path) else { return .failed("Missing demo file.") }
             return .loaded(diff)
@@ -66,7 +66,7 @@ nonisolated struct PullRequestLoader: Sendable {
 
         async let base = file.status == .added
             ? Data()
-            : client.fileContents(repository: repository, path: file.previousPath ?? file.path, ref: pullRequest.baseSHA)
+            : client.fileContents(repository: repository, path: file.previousPath ?? file.path, ref: baseSHA ?? pullRequest.baseSHA)
         async let head = file.status == .deleted
             ? Data()
             : client.fileContents(repository: repository, path: file.path, ref: pullRequest.headSHA)
@@ -109,7 +109,7 @@ nonisolated struct PullRequestLoader: Sendable {
         return issues
     }
 
-    private func changedFile(_ file: GitHubChangedFile) -> ChangedFile {
+    static func changedFile(_ file: GitHubChangedFile) -> ChangedFile {
         let status: ChangeStatus = switch file.status {
         case "added": .added
         case "removed": .deleted

@@ -81,6 +81,19 @@ public struct ReviewReport: Decodable, Sendable, Equatable {
         public let question: String
     }
 
+    /// What happened to a finding from an earlier review, after new commits.
+    public struct PreviousFinding: Decodable, Sendable, Equatable {
+        public enum Status: String, Decodable, Sendable {
+            case addressed, open
+        }
+
+        /// Its number in the earlier review's list.
+        public let index: Int
+        public let status: Status
+        /// Where an open finding is now, 1-based in the new file.
+        public let line: Int?
+    }
+
     public enum ParseError: LocalizedError {
         case noJSON
         case invalid(String)
@@ -99,6 +112,8 @@ public struct ReviewReport: Decodable, Sendable, Equatable {
     public let findings: [Finding]
     public let specCheck: SpecCheck?
     public let questions: [Question]?
+    /// Only for a re-review after new commits.
+    public let previousFindings: [PreviousFinding]?
 
     /// Tells the model exactly what to reply with.
     public static let formatInstructions = """
@@ -133,6 +148,13 @@ public struct ReviewReport: Decodable, Sendable, Equatable {
     check against, set "tooVagueToCheck": true and leave goals empty rather than guessing. List unrequested changes only
     when they are real behaviour changes. Ask at most 3 questions, only about intent or context the diff can't answer,
     each on a new-file line; ask none if nothing is unclear.
+    """
+
+    /// Added to the format when an earlier review's findings are sent along.
+    public static let previousFindingsInstructions = """
+    Also add "previousFindings": [{"index": 0, "status": "addressed" | "open", "line": 42}], with one entry for every \
+    earlier finding. Use "addressed" only when the new commits fix it. For "open", give its current new-file line.
+    Report new findings only for lines changed since the earlier review.
     """
 
     /// Reads the JSON object out of a reply, ignoring any text or code fence around it.

@@ -67,3 +67,12 @@ struct ReviewReportSpecTests {
         #expect(report.questions == nil)
     }
 }
+
+struct ReviewReportReReviewTests {
+    @Test func readsWhatHappenedToEarlierFindings() throws {
+        let reply = #"{"summary": "s", "risk": "low", "findings": [], "previousFindings": [{"index": 0, "status": "addressed"}, {"index": 1, "status": "open", "line": 9}]}"#
+        let previous = try #require(try ReviewReport.parse(reply).previousFindings)
+        #expect(previous[0].status == .addressed)
+        #expect(previous[1].line == 9)
+    }
+}

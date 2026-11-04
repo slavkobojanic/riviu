@@ -63,6 +63,16 @@ public struct GitHubClient: Sendable {
         return files
     }
 
+    /// Every review submitted on the pull request, oldest first.
+    public func reviews(repository: String, number: Int) async throws -> [GitHubReview] {
+        try await get("repos/\(repository)/pulls/\(number)/reviews", query: [URLQueryItem(name: "per_page", value: "100")])
+    }
+
+    /// The commits and file changes between two commits.
+    public func compare(repository: String, base: String, head: String) async throws -> GitHubComparison {
+        try await get("repos/\(repository)/compare/\(base)...\(head)")
+    }
+
     /// The commit the pull request's changes are measured from: where its branch split off the base branch.
     public func mergeBase(repository: String, base: String, head: String) async throws -> String {
         struct Comparison: Decodable {

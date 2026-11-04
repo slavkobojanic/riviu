@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import RiviuAI
 import RiviuDiff
+import RiviuGitHub
 
 /// An AI review of one pull request at one commit: a summary, an overall risk and line-level findings.
 nonisolated struct AIReview: Codable, Sendable {
@@ -105,17 +106,55 @@ final class AIReviewStore {
             let provider = try AISetup.makeProvider(for: .review, settings: settings)
             async let fetchedGuidelines = account.loader.repositoryGuidelines(for: pullRequest)
             async let linkedIssues = account.loader.linkedIssues(for: pullRequest)
+            async let previous = previousReview(for: pullRequest)
             let guidelines = await fetchedGuidelines
+            let earlier = await previous
             let request = ReviewPrompts.reviewRequest(instructions: settings.reviewInstructions, pullRequest: pullRequest,
-                                                      guidelines: guidelines, linkedIssues: await linkedIssues)
+                                                      guidelines: guidelines, linkedIssues: await linkedIssues, previous: earlier)
             let report = try ReviewReport.parse(try await provider.reply(to: request))
             var review = AIReview(pullRequest: pullRequest, report: report, author: author)
+            if let earlier {
+                review.findings = carriedOver(earlier.findings, report: report, pullRequest: pullRequest) + review.findings
+            }
             review.guidelineFiles = guidelines.map(\.path)
             reviews[reference] = review
             activities[reference] = nil
             save()
         } catch {
             activities[reference] = .failed(error.localizedDescription)
+        }
+    }
+
+    /// The last review's open findings and what changed since, when the pull request has new commits.
+    private func previousReview(for pullRequest: PullRequest) async -> PreviousReview? {
+        guard let earlier = reviews[pullRequest.reference], earlier.headSHA != pullRequest.headSHA, !pullRequest.reference.isDemo,
+              let client = account.client else { return nil }
+        let open = earlier.findings.filter { !$0.isAddressed }
+        guard !open.isEmpty,
+              let comparison = try? await client.compare(repository: pullRequest.reference.repository, base: earlier.headSHA,
+                                                         head: pullRequest.headSHA),
+              comparison.status == "ahead" else { return nil }
+        let changedFiles = (comparison.files ?? []).map(PullRequestLoader.changedFile)
+        return PreviousReview(findings: open, changedFiles: changedFiles)
+    }
+
+    /// Earlier findings the AI says are still open move to their new line; fixed ones are kept, marked as addressed.
+    private func carriedOver(_ earlier: [ReviewFinding], report: ReviewReport, pullRequest: PullRequest) -> [ReviewFinding] {
+        let outcomes = Dictionary((report.previousFindings ?? []).map { ($0.index, $0) }, uniquingKeysWith: { first, _ in first })
+        return earlier.enumerated().compactMap { index, finding in
+            var finding = finding
+            switch outcomes[index] {
+            case let outcome? where outcome.status == .addressed:
+                finding.addressedInSHA = pullRequest.headSHA
+            case let outcome?:
+                guard let line = outcome.line, line > 0 else { return nil }
+                finding = ReviewFinding(id: finding.id, filePath: finding.filePath, side: .head, lineIndex: line - 1,
+                                        title: finding.title, body: finding.body, severity: finding.severity)
+            case nil:
+                // The AI didn't say; its old line number can't be trusted on the new commit.
+                return nil
+            }
+            return finding
         }
     }
 

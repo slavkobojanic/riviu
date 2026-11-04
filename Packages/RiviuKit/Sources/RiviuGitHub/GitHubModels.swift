@@ -64,6 +64,26 @@ public struct GitHubIssue: Decodable, Sendable {
     public let body: String?
 }
 
+/// A review someone submitted, at the commit they were looking at.
+public struct GitHubReview: Decodable, Sendable {
+    public let id: Int
+    /// nil for a deleted account.
+    public let user: GitHubUser?
+    public let commitId: String?
+    /// APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED or PENDING.
+    public let state: String
+    /// nil while the review is still pending.
+    public let submittedAt: Date?
+}
+
+/// How one commit relates to another.
+public struct GitHubComparison: Decodable, Sendable {
+    /// "ahead" when head simply builds on base; "diverged" or "behind" after a rebase or force-push.
+    public let status: String
+    public let totalCommits: Int
+    public let files: [GitHubChangedFile]?
+}
+
 /// One file changed by a pull request.
 public struct GitHubChangedFile: Decodable, Sendable {
     public let filename: String

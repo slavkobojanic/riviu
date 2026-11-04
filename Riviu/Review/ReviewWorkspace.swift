@@ -40,6 +40,17 @@ struct ReviewLocation: Equatable {
     let filePath: String?
 }
 
+/// What changed since you last reviewed the pull request.
+struct SinceLastReview {
+    /// The commit your last review was on.
+    let reviewedSHA: String
+    let reviewedAt: Date
+    let commitCount: Int
+    /// After a rebase or force-push the changes can include work from the base branch.
+    let isRebased: Bool
+    let files: [ChangedFile]
+}
+
 /// Which match is selected (0-based, or -1) out of how many, as reported by the diff view.
 struct FindStatus: Equatable {
     var current = -1
@@ -86,6 +97,10 @@ final class ReviewWorkspace {
     private(set) var changedSinceViewedPaths: Set<String> = []
     /// Conversations already on the pull request, from GitHub.
     private(set) var threads: [GitHubReviewThread] = []
+    /// Set when there are new commits since your last review.
+    private(set) var sinceLastReview: SinceLastReview?
+    /// True while the diff shows only what changed since your last review.
+    private(set) var showsChangesSinceLastReview = false
     /// CI checks on the head commit, and the messages they left on lines.
     private(set) var checkRuns: [GitHubCheckRun] = []
     private(set) var annotations: [GitHubCheckAnnotation] = []
@@ -126,7 +141,17 @@ final class ReviewWorkspace {
     }
 
     var selectedFile: ChangedFile? {
-        selectedFilePath.flatMap { pullRequest?.file(at: $0) }
+        selectedFilePath.flatMap(visibleFile)
+    }
+
+    /// The files the sidebar lists: all of them, or only those changed since your last review.
+    var visibleFiles: [ChangedFile] {
+        if showsChangesSinceLastReview, let sinceLastReview { return sinceLastReview.files }
+        return pullRequest?.files ?? []
+    }
+
+    func visibleFile(at path: String) -> ChangedFile? {
+        visibleFiles.first { $0.path == path }
     }
 
     var selectedFileContent: FileContent? {
@@ -179,6 +204,8 @@ final class ReviewWorkspace {
         fileContents = [:]
         syntaxByPath = [:]
         threads = []
+        sinceLastReview = nil
+        showsChangesSinceLastReview = false
         checkRuns = []
         annotations = []
         loadChecks(for: newPullRequest)
@@ -206,7 +233,7 @@ final class ReviewWorkspace {
 
     /// Selects a file only if it's in the open pull request (folders in the sidebar are ignored).
     func selectFile(at path: String?) {
-        guard let path, pullRequest?.file(at: path) != nil else { return }
+        guard let path, visibleFile(at: path) != nil else { return }
         navigating {
             selectedFilePath = path
             showsOverview = false
@@ -219,8 +246,8 @@ final class ReviewWorkspace {
             navigating { showsOverview = false }
             return
         }
-        guard let paths = pullRequest?.files.map(\.path), let current = selectedFilePath,
-              let index = paths.firstIndex(of: current) else { return }
+        let paths = visibleFiles.map(\.path)
+        guard let current = selectedFilePath, let index = paths.firstIndex(of: current) else { return }
         let next = index + offset
         if paths.indices.contains(next) {
             navigating { selectedFilePath = paths[next] }
@@ -271,7 +298,7 @@ final class ReviewWorkspace {
     }
 
     private func apply(_ target: ReviewLocation) {
-        if let path = target.filePath, pullRequest?.file(at: path) != nil {
+        if let path = target.filePath, visibleFile(at: path) != nil {
             selectedFilePath = path
             showsOverview = false
         } else {
@@ -297,21 +324,23 @@ final class ReviewWorkspace {
     // MARK: - File contents
 
     private func loadContent(ofFileAt path: String?) {
-        guard let path, let pullRequest, let file = pullRequest.file(at: path) else { return }
+        guard let path, let pullRequest, let file = visibleFile(at: path) else { return }
         switch fileContents[path] {
         case .loading, .loaded, .binary: return
         case .failed, nil: break
         }
         fileContents[path] = .loading
         let loader = account.loader
+        let baseSHA = diffBaseSHA
         Task {
             let content: FileContent
             do {
-                content = try await loader.content(of: file, in: pullRequest)
+                content = try await loader.content(of: file, in: pullRequest, baseSHA: baseSHA)
             } catch {
                 content = .failed(error.localizedDescription)
             }
-            guard self.pullRequest?.reference == pullRequest.reference else { return }
+            // Drop it if the pull request or the comparison changed while it loaded.
+            guard self.pullRequest?.reference == pullRequest.reference, diffBaseSHA == baseSHA else { return }
             fileContents[path] = content
             if case let .loaded(diff) = content {
                 loadSyntax(for: diff)
@@ -326,6 +355,48 @@ final class ReviewWorkspace {
         guard let path = selectedFilePath else { return }
         fileContents[path] = nil
         loadContent(ofFileAt: path)
+    }
+
+    // MARK: - Changes since your last review
+
+    /// The commit the diff is measured from.
+    private var diffBaseSHA: String {
+        if showsChangesSinceLastReview, let sinceLastReview { return sinceLastReview.reviewedSHA }
+        return pullRequest?.baseSHA ?? ""
+    }
+
+    /// Switches between the whole pull request and only what changed since your last review.
+    func setShowsChangesSinceLastReview(_ shows: Bool) {
+        guard shows != showsChangesSinceLastReview, sinceLastReview != nil || !shows else { return }
+        showsChangesSinceLastReview = shows
+        fileContents = [:]
+        syntaxByPath = [:]
+        let path = selectedFilePath.flatMap(visibleFile)?.path ?? visibleFiles.first?.path
+        selectedFilePath = nil
+        selectedFilePath = path
+    }
+
+    /// The login whose last review "since your last review" is measured from.
+    private var reviewerLogin: String? {
+        #if DEBUG
+        if let login = UserDefaults.standard.string(forKey: "debugReviewer") { return login }
+        #endif
+        return account.user?.login
+    }
+
+    private func loadSinceLastReview(for pullRequest: PullRequest, client: GitHubClient) async {
+        let reference = pullRequest.reference
+        guard let login = reviewerLogin,
+              let reviews = try? await client.reviews(repository: reference.repository, number: reference.number),
+              let last = reviews.last(where: { $0.user?.login == login && $0.submittedAt != nil && $0.commitId != nil }),
+              let reviewedSHA = last.commitId, let reviewedAt = last.submittedAt, reviewedSHA != pullRequest.headSHA,
+              let comparison = try? await client.compare(repository: reference.repository, base: reviewedSHA, head: pullRequest.headSHA)
+        else { return }
+        // Only files that are still part of the pull request.
+        let files = (comparison.files ?? []).map(PullRequestLoader.changedFile).filter { pullRequest.file(at: $0.path) != nil }
+        guard self.pullRequest?.reference == reference, !files.isEmpty else { return }
+        sinceLastReview = SinceLastReview(reviewedSHA: reviewedSHA, reviewedAt: reviewedAt, commitCount: comparison.totalCommits,
+                                          isRebased: comparison.status != "ahead", files: files)
     }
 
     // MARK: - Rows
@@ -366,7 +437,9 @@ final class ReviewWorkspace {
             guard annotation.path == path, let lineIndex = annotationLineIndex(annotation, inFileAt: path) else { return nil }
             return Attachment(id: Self.attachmentID(forAnnotation: index), side: .head, lineIndex: lineIndex)
         }
-        return findingAttachments + annotationAttachments + threadAttachments + commentAttachments
+        let all = findingAttachments + annotationAttachments + threadAttachments + commentAttachments
+        // The base side is a different commit while comparing with your last review, so its line numbers don't match.
+        return showsChangesSinceLastReview ? all.filter { $0.side == .head } : all
     }
 
     /// Annotations name 1-based lines of the head version; some point outside the file.
@@ -480,6 +553,9 @@ final class ReviewWorkspace {
                 }
                 threads = try await loadedThreads
                 rebuildRows()
+                if let pullRequest {
+                    await loadSinceLastReview(for: pullRequest, client: client)
+                }
             } catch {
                 guard pullRequest?.reference == reference else { return }
                 syncErrorMessage = "Couldn't load viewed files and conversations from GitHub: \(error.localizedDescription)"
@@ -622,10 +698,16 @@ final class ReviewWorkspace {
 
     // MARK: - Findings
 
-    /// The open pull request's AI findings.
+    /// The open pull request's AI findings that still need attention.
     var findings: [ReviewFinding] {
         guard let reference = pullRequest?.reference else { return [] }
-        return aiReviews.review(for: reference)?.findings ?? []
+        return (aiReviews.review(for: reference)?.findings ?? []).filter { !$0.isAddressed }
+    }
+
+    /// Findings from an earlier review that new commits fixed.
+    var addressedFindings: [ReviewFinding] {
+        guard let reference = pullRequest?.reference else { return [] }
+        return (aiReviews.review(for: reference)?.findings ?? []).filter(\.isAddressed)
     }
 
     /// Findings on lines that exist in the file; an AI can name a line that isn't there.
@@ -693,7 +775,8 @@ final class ReviewWorkspace {
     }
 
     func startComment(on target: CodeTarget, body: String = "") {
-        guard let reference = pullRequest?.reference else { return }
+        // GitHub's base side is the pull request's base, not the commit you last reviewed.
+        guard let reference = pullRequest?.reference, !(showsChangesSinceLastReview && target.side == .base) else { return }
         let comment = ReviewComment(id: UUID(), pullRequest: reference, filePath: target.filePath,
                                     side: target.side, lines: target.lines, code: target.code,
                                     body: body, isEditing: true, isNew: true)
