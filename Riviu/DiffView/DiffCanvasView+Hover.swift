@@ -185,6 +185,33 @@ extension DiffCanvasView {
         popover.show(relativeTo: gutterActions.bounds, of: gutterActions, preferredEdge: .maxY)
     }
 
+    func showHotPath() {
+        guard let target = currentTarget() ?? caretTarget(), let content = makeHotPathPopover?(target) else { return }
+        popover.contentViewController = content
+        if gutterActions.isHidden {
+            popover.show(relativeTo: caretRect(), of: self, preferredEdge: .maxY)
+        } else {
+            popover.show(relativeTo: gutterActions.bounds, of: gutterActions, preferredEdge: .maxY)
+        }
+    }
+
+    /// The caret's line, for ⌥H when nothing is selected or hovered.
+    func caretTarget() -> CodeTarget? {
+        guard let selection, let line = line(atRow: selection.head.row, column: selection.column) else { return nil }
+        return CodeTarget(filePath: filePath, side: line.side, lines: line.index...line.index, code: line.text)
+    }
+
+    private func caretRect() -> CGRect {
+        guard let selection else { return CGRect(x: visibleRect.midX, y: visibleRect.midY, width: 1, height: 1) }
+        return CGRect(x: textOriginX(selection.column) + caretOffset(), y: rowTops[selection.head.row], width: 1, height: lineHeight)
+    }
+
+    private func caretOffset() -> CGFloat {
+        guard let selection, let line = line(atRow: selection.head.row, column: selection.column) else { return 0 }
+        let textLine = cachedTextLine(for: line, row: selection.head.row, column: selection.column)
+        return CTLineGetOffsetForStringIndex(textLine, min(selection.head.column, line.text.utf16.count), nil)
+    }
+
     func commentOnTarget() {
         guard let target = currentTarget() else { return }
         clearInteraction()

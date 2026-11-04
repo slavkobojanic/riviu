@@ -46,6 +46,7 @@ let package = Package(
                 .product(name: "TreeSitterMarkdown", package: "tree-sitter-markdown"),
             ]
         ),
+        .testTarget(name: "RiviuSyntaxTests", dependencies: ["RiviuSyntax"]),
         .target(
             name: "RiviuMarkdown",
             dependencies: [.product(name: "Textual", package: "textual")]

@@ -24,6 +24,9 @@ extension DiffCanvasView {
             needsDisplay = true
             return
         }
+        if event.modifierFlags.contains(.command), !isInGutter(point), goToDefinition(at: position, column: column, point: point) {
+            return
+        }
 
         selection = selectionForClick(event, at: position, column: column, inGutter: isInGutter(point))
         gutterActions.isHidden = true
@@ -107,6 +110,25 @@ extension DiffCanvasView {
 
     func isWordCharacter(_ character: UInt16) -> Bool {
         (48...57).contains(character) || (65...90).contains(character) || (97...122).contains(character) || character == 95
+    }
+
+    /// ⌘-click on a name shows where it's defined. Returns false when there's no name under the click.
+    private func goToDefinition(at position: TextPosition, column: Int, point: CGPoint) -> Bool {
+        guard let line = line(atRow: position.row, column: column) else { return false }
+        let range = wordRange(in: line.text, around: position.column)
+        let characters = Array(line.text.utf16)
+        guard !range.isEmpty else { return false }
+        let name = String(decoding: characters[range], as: UTF16.self)
+        guard !(name.first?.isNumber ?? true) else { return false }
+        let target = CodeTarget(filePath: filePath, side: line.side, lines: line.index...line.index, code: line.text)
+        selection = DiffSelection(column: column, anchor: TextPosition(row: position.row, column: range.lowerBound),
+                                  head: TextPosition(row: position.row, column: range.upperBound))
+        setNeedsDisplay(visibleRect)
+        if let content = goToDefinition?(name, target) {
+            popover.contentViewController = content
+            popover.show(relativeTo: CGRect(x: point.x, y: rowTops[position.row], width: 1, height: lineHeight), of: self, preferredEdge: .maxY)
+        }
+        return true
     }
 
     private func wordRange(in text: String, around offset: Int) -> Range<Int> {

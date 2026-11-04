@@ -1,12 +1,26 @@
 #if DEBUG
-import Foundation
+import AppKit
 import RiviuDiff
+import SwiftUI
 
 /// Launch arguments for jumping straight to a pull request while developing, like
 /// `Riviu -debugOpen demo#471 -debugFile services/webhook/handler.go -debugLine 40`.
 /// `-debugReviewer login` pretends to be someone else for "since your last review", and
-/// `-debugSinceReview YES` turns it on. `-debugTour YES` plans a guided tour with the AI and starts it.
+/// `-debugSinceReview YES` turns it on. `-debugHotPath YES` opens the hot path of `-debugLine` in a panel. `-debugTour YES` plans a guided tour with the AI and starts it.
 enum DebugLaunch {
+    /// Keeps the panel alive.
+    private static var panel: NSPanel?
+
+    private static func showHotPath(path: String, line: Int, workspace: ReviewWorkspace) {
+        let target = CodeTarget(filePath: path, side: .head, lines: line...line, code: "")
+        let panel = NSPanel(contentRect: CGRect(x: 200, y: 200, width: 660, height: 700), styleMask: [.titled, .closable, .resizable],
+                            backing: .buffered, defer: false)
+        panel.title = "Hot Path (debug)"
+        panel.contentView = NSHostingView(rootView: HotPathPopover(target: target, workspace: workspace) {})
+        panel.makeKeyAndOrderFront(nil)
+        self.panel = panel
+    }
+
     static func run(workspace: ReviewWorkspace, account: GitHubAccount, aiReviews: AIReviewStore) {
         let arguments = UserDefaults.standard
         guard let id = arguments.string(forKey: "debugOpen"), let hash = id.lastIndex(of: "#"),
@@ -38,6 +52,9 @@ enum DebugLaunch {
             }
             let line = arguments.integer(forKey: "debugLine")
             workspace.reveal(lineIndex: max(0, line - 1), on: .head, inFileAt: path)
+            if arguments.bool(forKey: "debugHotPath") {
+                showHotPath(path: path, line: max(0, line - 1), workspace: workspace)
+            }
         }
     }
 }

@@ -136,6 +136,7 @@ final class ReviewWorkspace {
     @ObservationIgnored private let account: GitHubAccount
     @ObservationIgnored private let aiReviews: AIReviewStore
     @ObservationIgnored private let rules: ReviewRuleStore
+    @ObservationIgnored let codeIndexes: CodeIndexStore
     @ObservationIgnored private var openTask: Task<Void, Never>?
     /// The pull request's GraphQL ID, needed to mark files as viewed on GitHub.
     @ObservationIgnored private var gitHubPullRequestID: String?
@@ -150,7 +151,8 @@ final class ReviewWorkspace {
     @ObservationIgnored private var syntaxByPath: [String: (base: SyntaxDocument, head: SyntaxDocument)] = [:]
     @ObservationIgnored private var structuralChangesByPath: [String: [Int: StructuralChange]] = [:]
 
-    init(settings: AppSettings, account: GitHubAccount, aiReviews: AIReviewStore, rules: ReviewRuleStore) {
+    init(settings: AppSettings, account: GitHubAccount, aiReviews: AIReviewStore, rules: ReviewRuleStore, codeIndexes: CodeIndexStore) {
+        self.codeIndexes = codeIndexes
         self.settings = settings
         self.account = account
         self.aiReviews = aiReviews
@@ -645,6 +647,67 @@ final class ReviewWorkspace {
     private func revealCurrentTourStop() {
         guard let stop = currentTourStop else { return }
         reveal(lineIndex: stop.lineIndex, on: stop.side, inFileAt: stop.filePath)
+    }
+
+    // MARK: - Code navigation
+
+    /// The index of the whole repository at the head commit, once it's built.
+    var codeIndex: SymbolIndex? {
+        pullRequest.flatMap(codeIndexes.index)
+    }
+
+    var codeIndexState: CodeIndexStore.State? {
+        pullRequest.flatMap(codeIndexes.state)
+    }
+
+    /// Downloads and indexes the repository the first time the hot path or Go to Definition is used.
+    func prepareCodeIndex() {
+        guard let pullRequest else { return }
+        let loader = account.loader
+        codeIndexes.prepare(pullRequest) {
+            await Self.headVersions(of: pullRequest, loader: loader)
+        }
+    }
+
+    /// The pull request's own files, for when the whole repository can't be downloaded.
+    private static func headVersions(of pullRequest: PullRequest, loader: PullRequestLoader) async -> [(path: String, text: String)] {
+        var files: [(path: String, text: String)] = []
+        for file in pullRequest.files.prefix(150) where file.status != .deleted {
+            if case let .loaded(diff)? = try? await loader.content(of: file, in: pullRequest) {
+                files.append((file.path, diff.headLines.joined(separator: "\n")))
+            }
+        }
+        return files
+    }
+
+    func explainHotPath(focus: String, code: String, callers: [HotPathItem], callees: [HotPathItem]) async throws -> String {
+        guard let pullRequest else { return "" }
+        let provider = try AISetup.makeProvider(for: .explain, settings: settings)
+        let request = ReviewPrompts.hotPathRequest(focus: focus, code: code, callers: callers, callees: callees, pullRequest: pullRequest)
+        return try await provider.reply(to: request)
+    }
+
+    /// Jumps to a name's definition when it's in the pull request and there's only one. Returns false when the
+    /// definitions should be listed instead, including while the index is still being built.
+    func jumpToDefinition(of name: String) -> Bool {
+        guard let index = codeIndex else { return false }
+        let definitions = index.definitions(named: name)
+        guard definitions.count == 1, let definition = definitions.first, pullRequest?.file(at: definition.path) != nil else { return false }
+        reveal(lineIndex: definition.lines.lowerBound, on: .head, inFileAt: definition.path)
+        return true
+    }
+
+    /// 0-based head lines the pull request added, for marking changed code on the hot path.
+    func changedHeadLines(inFileAt path: String) -> Set<Int> {
+        guard let patch = pullRequest?.file(at: path)?.patch else { return [] }
+        return Set(PatchHunk.hunks(in: patch).flatMap(\.addedLines).map { $0 - 1 })
+    }
+
+    /// Shows code from the index: jumps to it if the file is in the pull request, which is the only code the diff can show.
+    func open(_ excerpt: CodeExcerpt) -> Bool {
+        guard pullRequest?.file(at: excerpt.path) != nil else { return false }
+        reveal(lineIndex: excerpt.focusLine ?? excerpt.firstLine, on: .head, inFileAt: excerpt.path)
+        return true
     }
 
     // MARK: - CI checks

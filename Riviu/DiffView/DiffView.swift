@@ -90,6 +90,19 @@ struct DiffView: NSViewRepresentable {
             return view
         }
 
+        canvas.makeHotPathPopover = { [weak canvas] target in
+            workspace.prepareCodeIndex()
+            return NSHostingController(rootView: HotPathPopover(target: target, workspace: workspace) { canvas?.closePopover() })
+                .withPreferredContentSize()
+        }
+
+        canvas.goToDefinition = { [weak canvas] name, _ in
+            workspace.prepareCodeIndex()
+            if workspace.jumpToDefinition(of: name) { return nil }
+            return NSHostingController(rootView: DefinitionPopover(name: name, workspace: workspace) { canvas?.closePopover() })
+                .withPreferredContentSize()
+        }
+
         canvas.makeExplainPopover = { [weak canvas] target in
             guard let pullRequest = workspace.pullRequest else { return NSViewController() }
             let popover = ExplainPopover(target: target, pullRequest: pullRequest, fileDiff: workspace.selectedFileDiff,
@@ -104,5 +117,13 @@ struct DiffView: NSViewRepresentable {
             controller.sizingOptions = [.preferredContentSize] // the popover grows as the answer streams in
             return controller
         }
+    }
+}
+
+extension NSHostingController {
+    /// Lets a popover resize as its SwiftUI content grows.
+    func withPreferredContentSize() -> Self {
+        sizingOptions = [.preferredContentSize]
+        return self
     }
 }

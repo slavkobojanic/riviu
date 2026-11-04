@@ -165,6 +165,38 @@ enum ReviewPrompts {
         return AIRequest(system: system, messages: [AIMessage(role: .user, text: "Dismissed findings:\n\(list)")])
     }
 
+    /// Explains how code flows through the functions on a hot path.
+    static func hotPathRequest(focus: String, code: String, callers: [HotPathItem], callees: [HotPathItem],
+                               pullRequest: PullRequest) -> AIRequest {
+        let system = """
+        You explain to a code reviewer how a piece of code fits into the program: who calls it, what it calls, and \
+        what a change to it could break along that path. Lines marked with "+" were changed by the pull request. \
+        At most 150 words of Markdown. Do not use tools.
+        """
+        func section(_ title: String, _ items: [HotPathItem]) -> String {
+            guard !items.isEmpty else { return "\(title): none found" }
+            return "\(title):\n" + items.map { item in
+                let code = item.excerpt.lines.enumerated().map { offset, line in
+                    (item.excerpt.changedLines.contains(item.excerpt.firstLine + offset) ? "+ " : "  ") + line
+                }.joined(separator: "\n")
+                return "\(item.title) in \(item.excerpt.path):\n```\n\(code)\n```"
+            }.joined(separator: "\n\n")
+        }
+        let question = """
+        Pull request \(pullRequest.reference.id): \(pullRequest.title)
+
+        The code being reviewed, \(focus):
+        ```
+        \(code)
+        ```
+
+        \(section("Called by", callers))
+
+        \(section("It calls", callees))
+        """
+        return AIRequest(system: system, messages: [AIMessage(role: .user, text: question)])
+    }
+
     /// Why a CI job failed, given the end of its log and the diff.
     static func failureRequest(checkName: String, log: String, pullRequest: PullRequest) -> AIRequest {
         let system = """

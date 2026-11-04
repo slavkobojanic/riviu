@@ -89,6 +89,23 @@ public struct GitHubClient: Sendable {
         try await get("repos/\(repository)/issues/\(number)")
     }
 
+    /// The repository's size on GitHub, in kilobytes.
+    public func repositorySize(_ repository: String) async throws -> Int {
+        struct Repository: Decodable { let size: Int }
+        let details: Repository = try await get("repos/\(repository)")
+        return details.size
+    }
+
+    /// Downloads the whole repository at a commit as a .tar.gz file and returns where it was saved.
+    public func downloadTarball(repository: String, ref: String) async throws -> URL {
+        let request = makeRequest(url: Self.apiURL.appending(path: "repos/\(repository)/tarball/\(ref)"))
+        let (file, response) = try await URLSession.shared.download(for: request)
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw http.statusCode == 404 ? GitHubError.notFound : GitHubError.requestFailed(status: http.statusCode, message: "Download failed")
+        }
+        return file
+    }
+
     /// A file's raw contents at a commit.
     public func fileContents(repository: String, path: String, ref: String) async throws -> Data {
         var components = URLComponents(url: Self.apiURL.appending(path: "repos/\(repository)/contents/\(path)"), resolvingAgainstBaseURL: false)!

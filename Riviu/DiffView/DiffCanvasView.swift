@@ -54,6 +54,9 @@ final class DiffCanvasView: NSView, NSPopoverDelegate {
     var onFindStatus: ((FindStatus) -> Void)?
     var makeAttachmentView: ((AttachmentID) -> NSView)?
     var makeExplainPopover: ((CodeTarget) -> NSViewController)?
+    var makeHotPathPopover: ((CodeTarget) -> NSViewController)?
+    /// For ⌘-click on a name: returns a popover to show, or nil after jumping straight to the definition.
+    var goToDefinition: ((_ name: String, _ target: CodeTarget) -> NSViewController?)?
 
     // MARK: Content
 
@@ -100,7 +103,7 @@ final class DiffCanvasView: NSView, NSPopoverDelegate {
     /// Remembered x position while moving the caret up and down, so it doesn't drift on short lines.
     var caretGoalX: CGFloat?
     var isDraggingSelection = false
-    let gutterActions = NSHostingView(rootView: GutterActions(onExplain: {}, onComment: {}))
+    let gutterActions = NSHostingView(rootView: GutterActions(onExplain: {}, onHotPath: {}, onComment: {}))
     lazy var gutterActionsSize = gutterActions.fittingSize
     let popover = NSPopover()
 
@@ -117,6 +120,7 @@ final class DiffCanvasView: NSView, NSPopoverDelegate {
     override init(frame: NSRect) {
         super.init(frame: frame)
         gutterActions.rootView = GutterActions(onExplain: { [weak self] in self?.explainTarget() },
+                                               onHotPath: { [weak self] in self?.showHotPath() },
                                                onComment: { [weak self] in self?.commentOnTarget() })
         gutterActions.isHidden = true
         addSubview(gutterActions)

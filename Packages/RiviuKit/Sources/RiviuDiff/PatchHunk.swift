@@ -9,18 +9,20 @@ public struct PatchHunk: Sendable, Equatable {
     public let firstRemovedLine: Int?
     /// The changed lines, without their "+" or "-", for describing the hunk.
     public let changedLines: [String]
+    /// 1-based new-file numbers of every added line.
+    public let addedLines: [Int]
 
     /// Splits a file's patch into its hunks.
     public static func hunks(in patch: String) -> [PatchHunk] {
         var hunks: [PatchHunk] = []
-        var current: (oldStart: Int, newStart: Int, firstAdded: Int?, firstRemoved: Int?, changed: [String])?
+        var current: (oldStart: Int, newStart: Int, firstAdded: Int?, firstRemoved: Int?, changed: [String], added: [Int])?
         var oldLine = 0
         var newLine = 0
 
         func finish() {
             if let hunk = current {
                 hunks.append(PatchHunk(oldStart: hunk.oldStart, newStart: hunk.newStart, firstAddedLine: hunk.firstAdded,
-                                       firstRemovedLine: hunk.firstRemoved, changedLines: hunk.changed))
+                                       firstRemovedLine: hunk.firstRemoved, changedLines: hunk.changed, addedLines: hunk.added))
             }
         }
 
@@ -28,7 +30,7 @@ public struct PatchHunk: Sendable, Equatable {
             if let match = line.wholeMatch(of: #/@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@.*/#),
                let old = Int(match.1), let new = Int(match.2) {
                 finish()
-                current = (old, new, nil, nil, [])
+                current = (old, new, nil, nil, [], [])
                 oldLine = old
                 newLine = new
                 continue
@@ -37,6 +39,7 @@ public struct PatchHunk: Sendable, Equatable {
             switch line.first {
             case "+":
                 if current?.firstAdded == nil { current?.firstAdded = newLine }
+                current?.added.append(newLine)
                 current?.changed.append(String(line.dropFirst()))
                 newLine += 1
             case "-":

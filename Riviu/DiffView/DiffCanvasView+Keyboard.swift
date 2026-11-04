@@ -9,6 +9,9 @@ extension DiffCanvasView {
     override func keyDown(with event: NSEvent) {
         if event.keyCode == 53 { // Escape
             collapseOrClearSelection()
+        } else if event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .option,
+                  event.charactersIgnoringModifiers == "h" {
+            showHotPath()
         } else {
             interpretKeyEvents([event])
         }
