@@ -1,4 +1,6 @@
+import AppKit
 import RiviuDiff
+import RiviuSyntax
 import SwiftUI
 
 /// The guided tour on the overview: a way to plan one, or its stops.
@@ -93,10 +95,12 @@ private struct StopRow: View {
 struct TourCarousel: View {
     let tour: ReviewTour
     let workspace: ReviewWorkspace
+    let settings: AppSettings
 
     /// Each card's vertical center in the scroll view, to find the one nearest the middle.
     @State private var cardCenters: [Int: CGFloat] = [:]
-    @FocusState private var isFocused: Bool
+    @State private var keyMonitor: Any?
+    @Environment(\.colorScheme) private var colorScheme
 
     /// The stops, then the closing card.
     private var cardCount: Int { tour.stops.count + 1 }
@@ -146,20 +150,38 @@ struct TourCarousel: View {
                     .onChange(of: geometry.size.height, initial: true) {
                         proxy.scrollTo(workspace.tourCardIndex ?? 0, anchor: .center)
                     }
-                    .onAppear { isFocused = true }
                 }
             }
         }
         .background(Color(nsColor: .underPageBackgroundColor))
         .overlay(alignment: .top) { header }
         .overlay(alignment: .bottom) { keyHints }
-        .focusable()
-        .focused($isFocused)
-        .focusEffectDisabled()
-        .onKeyPress(.upArrow) { workspace.advanceTour(by: -1); return .handled }
-        .onKeyPress(.downArrow) { workspace.advanceTour(by: 1); return .handled }
-        .onKeyPress(.return) { workspace.openCurrentTourStop(); return .handled }
-        .onKeyPress(.escape) { workspace.endTour(); return .handled }
+        // The scroll view takes arrow keys before SwiftUI's key handlers see them, so keys are caught on
+        // their way into the window instead.
+        .onAppear {
+            keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+                MainActor.assumeIsolated { handleKey(event) } ? nil : event
+            }
+        }
+        .onDisappear {
+            if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
+            keyMonitor = nil
+        }
+    }
+
+    /// ↑ and ↓ move between cards, Return opens the stop in the diff and Esc ends the tour.
+    /// Returns false for other keys, and while typing somewhere like the chat.
+    private func handleKey(_ event: NSEvent) -> Bool {
+        if event.window?.firstResponder is NSText { return false }
+        guard event.modifierFlags.intersection([.command, .option, .control]).isEmpty else { return false }
+        switch event.keyCode {
+        case 126: workspace.advanceTour(by: -1) // up arrow
+        case 125: workspace.advanceTour(by: 1) // down arrow
+        case 36: workspace.openCurrentTourStop() // return
+        case 53: workspace.endTour() // escape
+        default: return false
+        }
+        return true
     }
 
     @ViewBuilder
@@ -167,7 +189,8 @@ struct TourCarousel: View {
         let isFocused = workspace.tourCardIndex == index
         Group {
             if tour.stops.indices.contains(index) {
-                TourStopCard(stop: tour.stops[index], number: index + 1, total: tour.stops.count, isFocused: isFocused) {
+                TourStopCard(stop: tour.stops[index], number: index + 1, total: tour.stops.count, isFocused: isFocused,
+                             theme: settings.themeFamily.theme(dark: colorScheme == .dark), font: settings.editorFont) {
                     workspace.openCurrentTourStop()
                 }
             } else {
@@ -223,36 +246,52 @@ struct TourCarousel: View {
     }
 }
 
-/// The chapters down the side, with the current one marked. Clicking one jumps to its first stop.
+/// The chapters down the side, each with its stops underneath, like the contents of a docs page.
+/// The stop in focus is marked; clicking a chapter or a stop goes there.
 private struct ChapterRail: View {
     let tour: ReviewTour
     let workspace: ReviewWorkspace
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 16) {
             ForEach(tour.chapters, id: \.self) { chapter in
-                let isCurrent = workspace.currentTourStop?.chapter == chapter
-                Button {
-                    if let first = tour.stops.firstIndex(where: { $0.chapter == chapter }) {
-                        workspace.focusTourCard(first)
+                VStack(alignment: .leading, spacing: 6) {
+                    Button(chapter) {
+                        if let first = tour.stops.firstIndex(where: { $0.chapter == chapter }) {
+                            workspace.focusTourCard(first)
+                        }
                     }
-                } label: {
-                    HStack(spacing: 10) {
-                        Circle()
-                            .fill(isCurrent ? AnyShapeStyle(.tint) : AnyShapeStyle(.quaternary))
-                            .frame(width: 8, height: 8)
-                        Text(chapter)
-                            .font(.callout.weight(isCurrent ? .semibold : .regular))
-                            .foregroundStyle(isCurrent ? .primary : .secondary)
-                            .multilineTextAlignment(.leading)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(workspace.currentTourStop?.chapter == chapter ? .primary : .secondary)
+                    ForEach(tour.stops.indices.filter { tour.stops[$0].chapter == chapter }, id: \.self) { index in
+                        stopLink(index)
                     }
-                    .contentShape(.rect)
                 }
-                .buttonStyle(.plain)
             }
         }
+        .buttonStyle(.plain)
+        .multilineTextAlignment(.leading)
         .padding(.leading, 24)
+        .padding(.trailing, 8)
         .frame(maxHeight: .infinity, alignment: .center)
+    }
+
+    private func stopLink(_ index: Int) -> some View {
+        let isCurrent = workspace.tourCardIndex == index
+        return Button { workspace.focusTourCard(index) } label: {
+            HStack(spacing: 8) {
+                Capsule()
+                    .fill(isCurrent ? AnyShapeStyle(.tint) : AnyShapeStyle(.quaternary))
+                    .frame(width: 2)
+                Text(tour.stops[index].title)
+                    .font(.caption)
+                    .foregroundStyle(isCurrent ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                    .padding(.vertical, 2)
+            }
+            // Keeps the marker as tall as the title; on its own it would stretch to fill the rail.
+            .fixedSize(horizontal: false, vertical: true)
+            .contentShape(.rect)
+        }
     }
 }
 
@@ -262,35 +301,39 @@ private struct TourStopCard: View {
     let number: Int
     let total: Int
     let isFocused: Bool
+    let theme: EditorTheme
+    let font: NSFont
     let open: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text(stop.chapter.uppercased())
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
+            HStack(alignment: .firstTextBaseline) {
+                Text(stop.title)
+                    .font(.title2.weight(.semibold))
                 Spacer()
                 Text("\(number) of \(total)")
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
-            Text(stop.title)
-                .font(.title2.weight(.semibold))
             Text(markdown: stop.explanation)
                 .font(.body)
                 .fixedSize(horizontal: false, vertical: true)
-            TourExcerptView(stop: stop, open: open)
+            TourExcerptView(stop: stop, theme: theme, font: font, open: open)
         }
         .padding(22)
         .cardBackground(isFocused: isFocused)
     }
 }
 
-/// The diff of a stop's lines.
+/// The diff of a stop's lines, highlighted like the diff view.
 private struct TourExcerptView: View {
     let stop: TourStop
+    let theme: EditorTheme
+    let font: NSFont
     let open: () -> Void
+
+    /// Each line with its syntax colors, once parsed.
+    @State private var highlighted: [AttributedString] = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -311,35 +354,62 @@ private struct TourExcerptView: View {
             .padding(.vertical, 8)
             Divider()
             VStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(stop.excerpt.enumerated()), id: \.offset) { _, line in
-                    ExcerptLine(line: line)
+                ForEach(Array(stop.excerpt.enumerated()), id: \.offset) { index, line in
+                    ExcerptLine(line: line, text: highlighted.indices.contains(index) ? highlighted[index] : AttributedString(line.text),
+                                theme: theme)
                 }
             }
+            .font(Font(font))
             .padding(.vertical, 4)
+            .background(Color(nsColor: theme.background))
         }
-        .background(.fill.quaternary, in: .rect(cornerRadius: 10))
+        .background(.fill.quaternary)
         .clipShape(.rect(cornerRadius: 10))
+        .task(id: "\(stop.filePath):\(stop.lines):\(theme.name)") {
+            highlighted = await highlight()
+        }
+    }
+
+    /// Parses just these lines. A few lines out of a file don't always parse perfectly, but they come close.
+    private func highlight() async -> [AttributedString] {
+        let lines = stop.excerpt.map(\.text)
+        let document = await SyntaxDocument.parse(lines: lines, language: SyntaxLanguage.detect(path: stop.filePath))
+        return lines.indices.map { index in
+            var text = AttributedString(lines[index])
+            text.foregroundColor = Color(nsColor: theme.foreground)
+            let utf16 = lines[index].utf16
+            for token in document.tokens(line: index) {
+                guard let color = theme.color(for: token.name), token.range.upperBound <= utf16.count,
+                      let lower = String.Index(utf16.index(utf16.startIndex, offsetBy: token.range.lowerBound), within: lines[index]),
+                      let upper = String.Index(utf16.index(utf16.startIndex, offsetBy: token.range.upperBound), within: lines[index]),
+                      let range = Range(lower..<upper, in: text) else { continue }
+                text[range].foregroundColor = Color(nsColor: color)
+            }
+            return text
+        }
     }
 }
 
 private struct ExcerptLine: View {
     let line: PatchExcerpt.Line
+    let text: AttributedString
+    let theme: EditorTheme
 
     var body: some View {
         HStack(spacing: 0) {
             Text(number.map(String.init) ?? "")
                 .frame(width: 40, alignment: .trailing)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color(nsColor: theme.lineNumber))
             Text(marker)
                 .frame(width: 22)
-                .foregroundStyle(.secondary)
-            Text(line.text.isEmpty ? " " : line.text)
+                .foregroundStyle(Color(nsColor: theme.lineNumber))
+            Text(line.text.isEmpty ? AttributedString(" ") : text)
                 .lineLimit(1)
         }
-        .font(.system(size: 12, design: .monospaced))
         .padding(.vertical, 1)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(tint)
+        // A plain rectangle: a bare color here takes the rounded shape of the card around it.
+        .background { Rectangle().fill(tint) }
     }
 
     private var number: Int? { line.newNumber ?? line.oldNumber }
@@ -353,9 +423,10 @@ private struct ExcerptLine: View {
     }
 
     private var tint: Color {
-        switch line.kind {
-        case .added: Color.green.opacity(0.14)
-        case .removed: Color.red.opacity(0.12)
+        let palette = DiffPalette(theme: theme, increaseContrast: false)
+        return switch line.kind {
+        case .added: Color(cgColor: palette.addedLine)
+        case .removed: Color(cgColor: palette.removedLine)
         case .context: .clear
         }
     }

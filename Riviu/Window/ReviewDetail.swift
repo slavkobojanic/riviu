@@ -21,7 +21,7 @@ struct ReviewDetail: View {
             ProgressView("Loading \(reference.id)…")
         } else if let pullRequest = workspace.pullRequest {
             if let tour = workspace.tour, workspace.isTouring, !workspace.isTourPaused {
-                TourCarousel(tour: tour, workspace: workspace)
+                TourCarousel(tour: tour, workspace: workspace, settings: settings)
             } else {
                 Group {
                     if workspace.showsOverview {
