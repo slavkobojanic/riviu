@@ -1,6 +1,7 @@
 import RiviuAI
 import RiviuDiff
 import RiviuGitHub
+import RiviuSyntax
 
 /// An earlier AI review, and what changed since, for reviewing only the new commits.
 struct PreviousReview {
@@ -194,6 +195,32 @@ enum ReviewPrompts {
         \(section("Called by", callers))
 
         \(section("It calls", callees))
+        """
+        return AIRequest(system: system, messages: [AIMessage(role: .user, text: question)])
+    }
+
+    /// Asks for one short sentence per hop on a hot path, as `{"hops": [...]}`: what happens going from each step to the next.
+    static func hotPathHopsRequest(path: HotPath, pullRequest: PullRequest) -> AIRequest {
+        let hopCount = path.steps.count - 1
+        let system = """
+        You describe a path through a program for a code reviewer. You get the functions on the path in order; each \
+        one calls the next, on the line marked ">". For each hop from one function to the next, write what happens: \
+        what the first function does to get there and why it calls the next one. At most 15 words each, plain words, \
+        `code` in backticks allowed, no trailing period. Lines marked "+" were changed by the pull request. \
+        Reply with only JSON: {"hops": ["…", …]} with exactly \(hopCount) strings, in order. Do not use tools.
+        """
+        let steps = path.steps.enumerated().map { number, step in
+            let code = step.excerpt.lines.enumerated().map { offset, line in
+                let lineNumber = step.excerpt.firstLine + offset
+                let marker = lineNumber == step.callLine ? "> " : step.excerpt.changedLines.contains(lineNumber) ? "+ " : "  "
+                return marker + line
+            }.joined(separator: "\n")
+            return "Step \(number + 1): \(step.title) in \(step.function.path)\n```\n\(code)\n```"
+        }.joined(separator: "\n\n")
+        let question = """
+        Pull request \(pullRequest.reference.id): \(pullRequest.title)
+
+        \(steps)
         """
         return AIRequest(system: system, messages: [AIMessage(role: .user, text: question)])
     }

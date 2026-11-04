@@ -92,7 +92,7 @@ struct DiffView: NSViewRepresentable {
 
         canvas.makeHotPathPopover = { [weak canvas] target in
             workspace.prepareCodeIndex()
-            return NSHostingController(rootView: HotPathPopover(target: target, workspace: workspace) { canvas?.closePopover() })
+            return NSHostingController(rootView: HotPathPopover(target: target, workspace: workspace, settings: settings) { canvas?.closePopover() })
                 .withPreferredContentSize()
         }
 

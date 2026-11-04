@@ -17,10 +17,10 @@ enum DebugLaunch {
 
     private static func showHotPath(path: String, line: Int, workspace: ReviewWorkspace) {
         let target = CodeTarget(filePath: path, side: .head, lines: line...line, code: "")
-        let panel = NSPanel(contentRect: CGRect(x: 200, y: 200, width: 660, height: 700), styleMask: [.titled, .closable, .resizable],
+        let panel = NSPanel(contentRect: CGRect(x: 200, y: 200, width: 720, height: 760), styleMask: [.titled, .closable, .resizable],
                             backing: .buffered, defer: false)
         panel.title = "Hot Path (debug)"
-        panel.contentView = NSHostingView(rootView: HotPathPopover(target: target, workspace: workspace) {})
+        panel.contentView = NSHostingView(rootView: HotPathPopover(target: target, workspace: workspace, settings: AppSettings()) {})
         panel.hidesOnDeactivate = false
         panel.makeKeyAndOrderFront(nil)
         self.panel = panel

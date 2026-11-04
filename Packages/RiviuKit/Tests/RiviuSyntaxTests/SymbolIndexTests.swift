@@ -26,6 +26,22 @@ struct SymbolIndexTests {
         #expect(index.calls(inside: 0...3, of: "Store.swift").map(\.name).contains("fetchToken"))
     }
 
+    @Test func swiftMethodsSpanJustTheMethod() async {
+        let swift = """
+        final class Store {
+            let name = "store"
+
+            func refresh() {
+                save()
+            }
+        }
+        """
+        let index = await SymbolIndex.build(files: [("Store.swift", swift)])
+        #expect(index.definitions(named: "refresh").map(\.lines) == [3...5])
+        #expect(index.enclosingDefinition(path: "Store.swift", line: 1) == nil)
+        #expect(index.enclosingDefinition(path: "Store.swift", line: 4)?.name == "refresh")
+    }
+
     @Test func indexesGoAndPython() async {
         let go = "package main\n\nfunc Handle() {\n\tqueue()\n}\n\nfunc queue() {}\n"
         let python = "def sync():\n    fetch_page()\n\ndef fetch_page():\n    pass\n"

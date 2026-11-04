@@ -99,6 +99,18 @@ public final class SymbolIndex: Sendable {
         linesByPath[path] != nil
     }
 
+    /// Functions and methods defined in a file, in order.
+    public func callableDefinitions(inFile path: String) -> [SymbolLocation] {
+        (symbolsByPath[path] ?? [])
+            .filter(\.isCallable)
+            .sorted { $0.lines.lowerBound < $1.lines.lowerBound }
+    }
+
+    /// Every line of an indexed file, or an empty array if it isn't indexed.
+    public func allLines(of path: String) -> [String] {
+        linesByPath[path] ?? []
+    }
+
     // MARK: - Parsing
 
     private static func symbols(in text: String, path: String, language: SyntaxLanguage) -> [SymbolLocation] {
@@ -108,6 +120,9 @@ public final class SymbolIndex: Sendable {
         guard (try? parser.setLanguage(grammar)) != nil, let mutable = parser.parse(text), let tree = mutable.copy() else { return [] }
         let utf16 = text.utf16
         var result: [SymbolLocation] = []
+        // Some tags queries match one definition twice, like Swift's methods: once spanning the whole class
+        // and once spanning just the method. By where the name is, this keeps the tighter one.
+        var definitionIndexByNameLocation: [Int: Int] = [:]
         for match in query.execute(in: tree).resolve(with: .init(string: text)) {
             guard let nameCapture = match.captures.first(where: { $0.name == "name" }),
                   let tag = match.captures.first(where: { ($0.name ?? "").hasPrefix("definition.") || ($0.name ?? "").hasPrefix("reference.") }),
@@ -120,8 +135,20 @@ public final class SymbolIndex: Sendable {
             let points = tag.node.pointRange
             let firstLine = Int(points.lowerBound.row)
             let lastLine = max(firstLine, Int(points.upperBound.row))
-            result.append(SymbolLocation(name: name, kind: parts.count > 1 ? String(parts[1]) : "", path: path,
-                                         lines: firstLine...lastLine, isDefinition: parts[0] == "definition"))
+            let symbol = SymbolLocation(name: name, kind: parts.count > 1 ? String(parts[1]) : "", path: path,
+                                        lines: firstLine...lastLine, isDefinition: parts[0] == "definition")
+            if symbol.isDefinition, let earlier = definitionIndexByNameLocation[range.location] {
+                if symbol.lines.count < result[earlier].lines.count {
+                    // Keep the kind that says it's callable, if either does.
+                    let kind = result[earlier].isCallable && !symbol.isCallable ? result[earlier].kind : symbol.kind
+                    result[earlier] = SymbolLocation(name: name, kind: kind, path: path, lines: symbol.lines, isDefinition: true)
+                }
+                continue
+            }
+            if symbol.isDefinition {
+                definitionIndexByNameLocation[range.location] = result.count
+            }
+            result.append(symbol)
         }
         return result
     }
