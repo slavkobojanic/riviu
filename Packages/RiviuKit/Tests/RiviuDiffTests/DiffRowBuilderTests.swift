@@ -67,6 +67,6 @@ struct FileTreeNodeTests {
 struct UnifiedDiffTextTests {
     @Test func rendersChangesWithContext() {
         let file = FileDiff(path: "a.txt", status: .modified, baseLines: ["a", "b", "c"], headLines: ["a", "B", "c"])
-        #expect(UnifiedDiffText.make(for: file) == "--- a/a.txt\n+++ b/a.txt\n a\n-b\n+B\n c")
+        #expect(UnifiedDiffText.make(for: file) == "--- a/a.txt\n+++ b/a.txt\n@@ -1,3 +1,3 @@\n a\n-b\n+B\n c")
     }
 }
