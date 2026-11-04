@@ -116,6 +116,14 @@ struct EditorTheme {
             "operator": p.op, "punctuation": p.punctuation,
             "attribute": p.attribute, "label": p.attribute,
             "text.title": p.heading, "text.uri": p.link, "text.reference": p.link,
+            "tag": p.keyword, "tag.attribute": p.attribute,
+            // Older capture names that some grammars (Kotlin, Elixir, Scala) still use.
+            "conditional": p.keyword, "repeat": p.keyword, "include": p.keyword, "exception": p.keyword,
+            "storageclass": p.keyword, "preproc": p.keyword,
+            "method": p.function, "parameter": p.parameter, "field": p.property,
+            "namespace": p.type, "module": p.type,
+            "float": p.number, "character": p.string, "string.regex": p.escape, "string.special.regex": p.escape,
+            "delimiter": p.punctuation,
         ]
         syntax = map.mapValues { NSColor(hex: $0) }
     }
