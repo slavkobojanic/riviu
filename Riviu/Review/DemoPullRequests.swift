@@ -1,6 +1,7 @@
 import Foundation
 import RiviuAI
 import RiviuDiff
+import RiviuGitHub
 
 /// Built-in example pull requests, for trying Riviu without signing in to GitHub.
 nonisolated enum DemoPullRequests {
@@ -50,6 +51,26 @@ nonisolated enum DemoPullRequests {
         review.specCheck = specChecks[pullRequest.number]
         review.questions = (questions[pullRequest.number] ?? []).compactMap(question)
         return review
+    }
+
+    /// Example CI results. Demo #471 has a failing lint job with annotations.
+    static func checkRuns(number: Int) -> [GitHubCheckRun] {
+        switch number {
+        case 471:
+            [GitHubCheckRun(id: 1, name: "lint", status: "completed", conclusion: "failure", annotationsCount: 1),
+             GitHubCheckRun(id: 2, name: "test (go 1.24)", status: "completed", conclusion: "success"),
+             GitHubCheckRun(id: 3, name: "test (rust stable)", status: "in_progress", conclusion: nil)]
+        default:
+            [GitHubCheckRun(id: 4, name: "build", status: "completed", conclusion: "success"),
+             GitHubCheckRun(id: 5, name: "test", status: "completed", conclusion: "success")]
+        }
+    }
+
+    static func annotations(number: Int) -> [GitHubCheckAnnotation] {
+        guard number == 471, let line = fileDiff(at: "scripts/sync_reviews.py")?.headLines.firstIndex(where: { $0.contains("url = response.links.get") })
+        else { return [] }
+        return [GitHubCheckAnnotation(path: "scripts/sync_reviews.py", startLine: line + 1, endLine: line + 1, annotationLevel: "failure",
+                                      title: "ruff", message: "E501 Line too long (104 > 100)")]
     }
 
     private static let specChecks: [Int: ReviewReport.SpecCheck] = [

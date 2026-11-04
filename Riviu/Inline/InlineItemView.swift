@@ -26,6 +26,8 @@ struct InlineItemView: View {
             CommentCard(comment: comment, workspace: workspace)
         case let .thread(thread):
             ThreadCard(thread: thread, workspace: workspace)
+        case let .annotation(annotation):
+            AnnotationCard(annotation: annotation)
         case nil:
             EmptyView()
         }

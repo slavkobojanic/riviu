@@ -18,6 +18,9 @@ struct PullRequestOverview: View {
                         .font(.callout)
                         .foregroundStyle(.orange)
                 }
+                if !workspace.checkRuns.isEmpty {
+                    ChecksSection(workspace: workspace)
+                }
                 AISummaryCard(pullRequest: pullRequest, aiReviews: aiReviews)
                 if let review = currentReview {
                     if let specCheck = review.specCheck {

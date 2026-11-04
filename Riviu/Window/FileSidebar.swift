@@ -118,6 +118,13 @@ private struct FileRow: View {
                     .font(.caption)
                     .help("\(commentCount) pending comment(s)")
             }
+            let ciCount = workspace.annotationCount(forFileAt: file.path)
+            if ciCount > 0 {
+                Label("\(ciCount)", systemImage: "xmark.octagon")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .help("\(ciCount) CI message(s)")
+            }
             let threadCount = workspace.unresolvedThreadCount(forFileAt: file.path)
             if threadCount > 0 {
                 Label("\(threadCount)", systemImage: "bubble.left.and.bubble.right")
@@ -206,6 +213,7 @@ private struct PullRequestHeader: View {
                     .lineLimit(1)
                 HStack(spacing: 6) {
                     AIReviewStatusLabel(reference: pullRequest.reference, aiReviews: aiReviews, placeholder: "Overview & AI summary")
+                    ChecksSummaryLabel(checkRuns: workspace.checkRuns)
                     Spacer(minLength: 4)
                     Image(systemName: "chevron.right")
                         .font(.caption.weight(.semibold))

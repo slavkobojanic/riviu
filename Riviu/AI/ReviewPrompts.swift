@@ -108,6 +108,28 @@ enum ReviewPrompts {
         return AIRequest(system: system, messages: [AIMessage(role: .user, text: question)])
     }
 
+    /// Why a CI job failed, given the end of its log and the diff.
+    static func failureRequest(checkName: String, log: String, pullRequest: PullRequest) -> AIRequest {
+        let system = """
+        You explain CI failures to someone reviewing a pull request. In at most 120 words of Markdown, say what failed \
+        and which change in the diff most likely caused it, or say plainly if the failure looks unrelated (flaky or \
+        infrastructure). If one changed line is the likely cause, end with a final line exactly like \
+        `Suspect: path/of/file:42`, using the new-file line number. Do not use tools.
+        """
+        let question = """
+        The check "\(checkName)" failed on pull request \(pullRequest.reference.id): \(pullRequest.title)
+
+        End of the job log:
+        ```
+        \(log)
+        ```
+
+        Diffs:
+        \(diffs(for: pullRequest, putFirst: nil, numbered: true))
+        """
+        return AIRequest(system: system, messages: [AIMessage(role: .user, text: question)])
+    }
+
     static func continueInChatMessage(target: CodeTarget) -> String {
         "Explain \(target.label) of `\(target.filePath)`:\n```\n\(target.code)\n```"
     }

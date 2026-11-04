@@ -10,6 +10,15 @@ enum InlineItem {
     case finding(ReviewFinding)
     case comment(ReviewComment)
     case thread(GitHubReviewThread)
+    case annotation(GitHubCheckAnnotation)
+}
+
+/// What the AI thinks broke a CI job, and the line it suspects.
+struct FailureExplanation {
+    let markdown: String
+    let suspectPath: String?
+    /// 0-based, in the new file.
+    let suspectLineIndex: Int?
 }
 
 /// Asks the diff view to move to the next or previous find match. `count` changes on every request.
@@ -77,6 +86,9 @@ final class ReviewWorkspace {
     private(set) var changedSinceViewedPaths: Set<String> = []
     /// Conversations already on the pull request, from GitHub.
     private(set) var threads: [GitHubReviewThread] = []
+    /// CI checks on the head commit, and the messages they left on lines.
+    private(set) var checkRuns: [GitHubCheckRun] = []
+    private(set) var annotations: [GitHubCheckAnnotation] = []
     /// Why viewed files or conversations couldn't be loaded or saved.
     private(set) var syncErrorMessage: String?
     private(set) var isSubmittingReview = false
@@ -167,6 +179,9 @@ final class ReviewWorkspace {
         fileContents = [:]
         syntaxByPath = [:]
         threads = []
+        checkRuns = []
+        annotations = []
+        loadChecks(for: newPullRequest)
         changedSinceViewedPaths = []
         syncErrorMessage = nil
         gitHubPullRequestID = nil
@@ -346,16 +361,32 @@ final class ReviewWorkspace {
         let threadAttachments = threads(inFileAt: path).compactMap { thread in
             thread.lineIndex.map { Attachment(id: Self.attachmentID(forThread: thread.id), side: thread.side, lineIndex: $0) }
         }
-        return findingAttachments + threadAttachments + commentAttachments
+        let annotationAttachments = annotations.indices.compactMap { index -> Attachment? in
+            let annotation = annotations[index]
+            guard annotation.path == path, let lineIndex = annotationLineIndex(annotation, inFileAt: path) else { return nil }
+            return Attachment(id: Self.attachmentID(forAnnotation: index), side: .head, lineIndex: lineIndex)
+        }
+        return findingAttachments + annotationAttachments + threadAttachments + commentAttachments
+    }
+
+    /// Annotations name 1-based lines of the head version; some point outside the file.
+    private func annotationLineIndex(_ annotation: GitHubCheckAnnotation, inFileAt path: String) -> Int? {
+        guard case let .loaded(diff) = fileContents[path] else { return nil }
+        let index = annotation.endLine - 1
+        return diff.headLines.indices.contains(index) ? index : nil
     }
 
     private static func attachmentID(forFinding id: String) -> AttachmentID { AttachmentID("finding:" + id) }
     private static func attachmentID(forComment id: UUID) -> AttachmentID { AttachmentID("comment:" + id.uuidString) }
     private static func attachmentID(forThread id: String) -> AttachmentID { AttachmentID("thread:" + id) }
+    private static func attachmentID(forAnnotation index: Int) -> AttachmentID { AttachmentID("annotation:\(index)") }
 
     func inlineItem(for id: AttachmentID) -> InlineItem? {
         if let thread = threads.first(where: { Self.attachmentID(forThread: $0.id) == id }) {
             return .thread(thread)
+        }
+        if let index = annotations.indices.first(where: { Self.attachmentID(forAnnotation: $0) == id }) {
+            return .annotation(annotations[index])
         }
         if let finding = findings.first(where: { Self.attachmentID(forFinding: $0.id) == id }) {
             return .finding(finding)
@@ -466,6 +497,43 @@ final class ReviewWorkspace {
         } catch {
             syncErrorMessage = "Couldn't reload conversations: \(error.localizedDescription)"
         }
+    }
+
+    // MARK: - CI checks
+
+    func annotationCount(forFileAt path: String) -> Int {
+        annotations.filter { $0.path == path && $0.annotationLevel != "notice" }.count
+    }
+
+    private func loadChecks(for pullRequest: PullRequest) {
+        let reference = pullRequest.reference
+        if reference.isDemo {
+            checkRuns = DemoPullRequests.checkRuns(number: reference.number)
+            annotations = DemoPullRequests.annotations(number: reference.number)
+            return
+        }
+        guard let client = account.client else { return }
+        Task {
+            guard let runs = try? await client.checkRuns(repository: reference.repository, commit: pullRequest.headSHA),
+                  self.pullRequest?.reference == reference else { return }
+            checkRuns = runs.sorted { ($0.isFailure ? 0 : 1, $0.name) < ($1.isFailure ? 0 : 1, $1.name) }
+            var loaded: [GitHubCheckAnnotation] = []
+            for run in runs.filter({ $0.output.annotationsCount > 0 }).prefix(10) {
+                loaded += (try? await client.annotations(repository: reference.repository, checkRunID: run.id)) ?? []
+            }
+            guard self.pullRequest?.reference == reference else { return }
+            annotations = loaded
+            rebuildRows()
+        }
+    }
+
+    /// Asks the AI why a job failed, from the end of its log and the diff.
+    func explainFailure(of run: GitHubCheckRun) async throws -> FailureExplanation {
+        guard let pullRequest, let client = account.client else { throw PullRequestLoader.LoadError.notSignedIn }
+        let log = try await client.jobLogTail(repository: pullRequest.reference.repository, jobID: run.id)
+        let provider = try AISetup.makeProvider(for: .explain, settings: settings)
+        let request = ReviewPrompts.failureRequest(checkName: run.name, log: log, pullRequest: pullRequest)
+        return FailureExplanation(reply: try await provider.reply(to: request), pullRequest: pullRequest)
     }
 
     // MARK: - Conversations
@@ -709,4 +777,21 @@ extension GitHubReviewThread {
     var side: DiffSide { diffSide == "LEFT" ? .base : .head }
     /// 0-based, or nil when the thread's lines are gone from the latest diff.
     var lineIndex: Int? { line.map { $0 - 1 } }
+}
+
+extension FailureExplanation {
+    /// The reply ends with "Suspect: path:line" when the AI can point at a changed line.
+    init(reply: String, pullRequest: PullRequest) {
+        var lines = reply.trimmingCharacters(in: .whitespacesAndNewlines).components(separatedBy: "\n")
+        var path: String?
+        var lineIndex: Int?
+        if let last = lines.last, let match = last.wholeMatch(of: #/(?i)\s*suspect:\s*`?([^`:\s]+):(\d+)`?\s*/#),
+           pullRequest.file(at: String(match.1)) != nil, let line = Int(match.2), line > 0 {
+            path = String(match.1)
+            lineIndex = line - 1
+            lines.removeLast()
+        }
+        self.init(markdown: lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines),
+                  suspectPath: path, suspectLineIndex: lineIndex)
+    }
 }

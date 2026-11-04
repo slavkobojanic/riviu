@@ -100,7 +100,7 @@ public struct GitHubClient: Sendable {
 
     // MARK: - Requests
 
-    private func get<Response: Decodable>(_ path: String, query: [URLQueryItem] = []) async throws -> Response {
+    func get<Response: Decodable>(_ path: String, query: [URLQueryItem] = []) async throws -> Response {
         var components = URLComponents(url: Self.apiURL.appending(path: path), resolvingAgainstBaseURL: false)!
         if !query.isEmpty {
             components.queryItems = query
