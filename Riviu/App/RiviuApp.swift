@@ -6,13 +6,12 @@ struct RiviuApp: App {
     @State private var settings: AppSettings
     @State private var account: GitHubAccount
     @State private var inbox: PullRequestInbox
-    @State private var workspace: ReviewWorkspace
+    @State private var tabs: ReviewTabs
     @State private var chats: ChatStore
     @State private var aiReviews: AIReviewStore
     @State private var rules: ReviewRuleStore
     @State private var watcher: ReviewRequestWatcher
     private let notifications = ReviewRequestNotifications()
-    private let mainWindow = MainWindow()
 
     init() {
         let settings = AppSettings()
@@ -22,43 +21,42 @@ struct RiviuApp: App {
         let inbox = PullRequestInbox(account: account)
         let rules = ReviewRuleStore()
         let aiReviews = AIReviewStore(settings: settings, account: account, rules: rules)
-        let workspace = ReviewWorkspace(settings: settings, account: account, aiReviews: aiReviews, rules: rules,
-                                        codeIndexes: CodeIndexStore(account: account))
+        let codeIndexes = CodeIndexStore(account: account)
+        let tabs = ReviewTabs(settings: settings) {
+            ReviewWorkspace(settings: settings, account: account, aiReviews: aiReviews, rules: rules, codeIndexes: codeIndexes)
+        }
         let watcher = ReviewRequestWatcher(account: account, settings: settings, aiReviews: aiReviews, inbox: inbox,
                                            notifications: notifications)
         _inbox = State(initialValue: inbox)
         _aiReviews = State(initialValue: aiReviews)
         _rules = State(initialValue: rules)
-        _workspace = State(initialValue: workspace)
+        _tabs = State(initialValue: tabs)
         _watcher = State(initialValue: watcher)
         _chats = State(initialValue: ChatStore(makeProvider: { try AISetup.makeProvider(for: .chat, settings: settings) }))
 
-        let mainWindow = mainWindow
         notifications.onOpen = { reference in
-            mainWindow.show()
-            workspace.open(reference)
+            tabs.open(reference)
         }
         watcher.start()
         #if DEBUG
-        DebugLaunch.run(workspace: workspace, account: account, aiReviews: aiReviews)
+        DebugLaunch.run(tabs: tabs, account: account, aiReviews: aiReviews)
         #endif
     }
 
     var body: some Scene {
-        Window("Riviu", id: MainWindow.id) {
-            ReviewWindow(workspace: workspace, inbox: inbox, account: account, chats: chats, aiReviews: aiReviews,
-                         watcher: watcher, settings: settings)
-                .remembersOpenWindow(in: mainWindow)
+        // Every window is a tab; ReviewTabs puts new ones in the same tab group.
+        WindowGroup("Riviu", id: ReviewTabs.windowID) {
+            ReviewTab(tabs: tabs, inbox: inbox, account: account, chats: chats, aiReviews: aiReviews, watcher: watcher,
+                      settings: settings)
                 .onAppear { appDelegate.settings = settings }
-                .onDisappear { mainWindow.didClose(keepsRunningInMenuBar: settings.keepsRunningInMenuBar) }
         }
         .defaultSize(width: 1500, height: 920)
         .commands {
-            ReviewCommands(workspace: workspace, watcher: watcher, settings: settings)
+            ReviewCommands(tabs: tabs, watcher: watcher, settings: settings)
         }
 
         MenuBarExtra(isInserted: $settings.keepsRunningInMenuBar) {
-            MenuBarPanel(watcher: watcher, account: account, aiReviews: aiReviews, workspace: workspace, mainWindow: mainWindow)
+            MenuBarPanel(watcher: watcher, account: account, aiReviews: aiReviews, tabs: tabs)
         } label: {
             MenuBarLabel(waitingCount: watcher.requests.count)
         }

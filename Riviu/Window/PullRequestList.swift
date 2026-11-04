@@ -1,3 +1,4 @@
+import AppKit
 import RiviuGitHub
 import SwiftUI
 
@@ -8,6 +9,7 @@ struct PullRequestList: View {
     let workspace: ReviewWorkspace
     let aiReviews: AIReviewStore
     let onOpen: (PullRequestReference) -> Void
+    @Environment(ReviewTabs.self) private var tabs
 
     @State private var searchText = ""
 
@@ -87,11 +89,21 @@ struct PullRequestList: View {
             List {
                 ForEach(inbox.pullRequests) { summary in
                     let reference = PullRequestReference(repository: summary.repository, number: summary.number)
-                    Button { onOpen(reference) } label: {
+                    Button {
+                        // ⌘-click opens it in a new tab, like a link in Safari.
+                        if NSEvent.modifierFlags.contains(.command) {
+                            tabs.open(reference)
+                        } else {
+                            onOpen(reference)
+                        }
+                    } label: {
                         PullRequestRow(summary: summary, reference: reference, isOpen: workspace.pullRequest?.reference == reference,
                                        aiReviews: aiReviews)
                     }
                     .buttonStyle(.plain)
+                    .contextMenu {
+                        Button("Open in New Tab") { tabs.open(reference) }
+                    }
                 }
             }
             .listStyle(.sidebar)

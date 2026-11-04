@@ -6,8 +6,8 @@ struct MenuBarPanel: View {
     let watcher: ReviewRequestWatcher
     let account: GitHubAccount
     let aiReviews: AIReviewStore
-    let workspace: ReviewWorkspace
-    let mainWindow: MainWindow
+    let tabs: ReviewTabs
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -19,7 +19,7 @@ struct MenuBarPanel: View {
             footer
         }
         .frame(width: 360)
-        .remembersOpenWindow(in: mainWindow)
+        .onAppear { tabs.remember(openWindow) }
     }
 
     private var header: some View {
@@ -80,7 +80,7 @@ struct MenuBarPanel: View {
 
     private var footer: some View {
         HStack {
-            Button("Open Riviu") { mainWindow.show() }
+            Button("Open Riviu") { tabs.show() }
             Spacer()
             SettingsLink { Text("Settings…") }
             Button("Quit") { NSApp.terminate(nil) }
@@ -90,8 +90,7 @@ struct MenuBarPanel: View {
     }
 
     private func open(_ summary: GitHubPullRequestSummary) {
-        mainWindow.show()
-        workspace.open(PullRequestReference(repository: summary.repository, number: summary.number))
+        tabs.open(PullRequestReference(repository: summary.repository, number: summary.number))
     }
 }
 

@@ -7,6 +7,7 @@ import SwiftUI
 /// `Riviu -debugOpen owner/repo#123 -debugFile Sources/App.swift -debugLine 40`.
 /// `-debugReviewer login` pretends to be someone else for "since your last review", and
 /// `-debugSinceReview YES` turns it on. `-debugHotPath YES` opens the hot path of `-debugLine` in a panel. `-debugTour YES` plans a guided tour with the AI and starts it.
+/// `-debugAlsoOpen owner/repo#124` opens a second pull request in a new tab.
 enum DebugLaunch {
     /// Keeps the panel alive.
     private static var panel: NSPanel?
@@ -21,16 +22,19 @@ enum DebugLaunch {
         self.panel = panel
     }
 
-    static func run(workspace: ReviewWorkspace, account: GitHubAccount, aiReviews: AIReviewStore) {
+    static func run(tabs: ReviewTabs, account: GitHubAccount, aiReviews: AIReviewStore) {
         let arguments = UserDefaults.standard
-        guard let id = arguments.string(forKey: "debugOpen"), let hash = id.lastIndex(of: "#"),
-              let number = Int(id[id.index(after: hash)...]) else { return }
-        let reference = PullRequestReference(repository: String(id[..<hash]), number: number)
+        guard let id = arguments.string(forKey: "debugOpen"), let reference = PullRequestReference(id: id) else { return }
         Task {
-            while !account.isSignedIn {
+            while !account.isSignedIn || tabs.frontmost == nil {
                 try? await Task.sleep(for: .milliseconds(100))
             }
-            workspace.open(reference)
+            tabs.open(reference)
+            guard let workspace = tabs.workspace(showing: reference) else { return }
+            if let other = arguments.string(forKey: "debugAlsoOpen").flatMap(PullRequestReference.init(id:)) {
+                try? await Task.sleep(for: .seconds(1))
+                tabs.open(other)
+            }
             if arguments.bool(forKey: "debugTour") {
                 while workspace.pullRequest == nil {
                     try? await Task.sleep(for: .milliseconds(100))

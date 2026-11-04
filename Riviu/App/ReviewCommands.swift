@@ -3,11 +3,19 @@ import SwiftUI
 
 /// Menu bar commands and their keyboard shortcuts.
 struct ReviewCommands: Commands {
-    let workspace: ReviewWorkspace
+    let tabs: ReviewTabs
     let watcher: ReviewRequestWatcher
     let settings: AppSettings
 
+    /// The tab in front.
+    private var workspace: ReviewWorkspace { tabs.current }
+
     var body: some Commands {
+        CommandGroup(after: .newItem) {
+            Button("New Tab") { tabs.openNewTab() }
+                .keyboardShortcut("t")
+        }
+
         CommandGroup(after: .textEditing) {
             Section {
                 Button("Find…") { workspace.showFind() }

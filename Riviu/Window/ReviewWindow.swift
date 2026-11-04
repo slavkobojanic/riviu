@@ -52,17 +52,17 @@ struct ReviewWindow: View {
         workspace.selectedFile != nil && !workspace.showsOverview
     }
 
+    /// Also the tab's name, so it's the pull request rather than the file.
     private var title: String {
-        guard let pullRequest = workspace.pullRequest else { return "Riviu" }
-        if workspace.showsOverview { return "Overview" }
-        return workspace.selectedFile?.fileName ?? pullRequest.title
+        if let pullRequest = workspace.pullRequest { return pullRequest.title }
+        if let reference = workspace.loadingReference { return reference.id }
+        return "Pull Requests"
     }
 
     private var subtitle: String {
         guard let pullRequest = workspace.pullRequest else { return "" }
-        guard let file = workspace.selectedFile, !workspace.showsOverview else { return pullRequest.reference.id }
-        let location = file.directory.isEmpty ? "" : file.directory + "  "
-        return "\(location)+\(file.additions) −\(file.deletions)"
+        guard let file = workspace.selectedFile, !workspace.showsOverview else { return "\(pullRequest.reference.id)  Overview" }
+        return "\(file.path)  +\(file.additions) −\(file.deletions)"
     }
 
     @ToolbarContentBuilder
