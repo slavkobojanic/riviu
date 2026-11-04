@@ -144,16 +144,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-/// Tells a tab which window it's in, when that window comes to the front, when it's shown (like when its tab
-/// is picked), and when it closes. A tab hidden behind another one isn't closed, though SwiftUI may say it disappeared.
+/// Tells a tab which window it's in, when that window comes to the front, and when it closes.
+/// (A tab hidden behind another one isn't closed, though SwiftUI may say it disappeared.)
 struct WindowObserver: NSViewRepresentable {
     let onAttach: (NSWindow) -> Void
     let onBecomeKey: () -> Void
-    let onShow: () -> Void
     let onClose: () -> Void
 
     func makeNSView(context: Context) -> ObservingView {
-        ObservingView(onAttach: onAttach, onBecomeKey: onBecomeKey, onShow: onShow, onClose: onClose)
+        ObservingView(onAttach: onAttach, onBecomeKey: onBecomeKey, onClose: onClose)
     }
 
     func updateNSView(_ view: ObservingView, context: Context) {}
@@ -161,16 +160,12 @@ struct WindowObserver: NSViewRepresentable {
     final class ObservingView: NSView {
         private let onAttach: (NSWindow) -> Void
         private let onBecomeKey: () -> Void
-        private let onShow: () -> Void
         private let onClose: () -> Void
         private var observers: [NSObjectProtocol] = []
-        private var wasVisible = false
 
-        init(onAttach: @escaping (NSWindow) -> Void, onBecomeKey: @escaping () -> Void, onShow: @escaping () -> Void,
-             onClose: @escaping () -> Void) {
+        init(onAttach: @escaping (NSWindow) -> Void, onBecomeKey: @escaping () -> Void, onClose: @escaping () -> Void) {
             self.onAttach = onAttach
             self.onBecomeKey = onBecomeKey
-            self.onShow = onShow
             self.onClose = onClose
             super.init(frame: .zero)
         }
@@ -190,19 +185,6 @@ struct WindowObserver: NSViewRepresentable {
             observers.append(center.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated { self?.onClose() }
             })
-            // Picking a tab puts its window on screen; the others' windows are hidden.
-            observers.append(center.addObserver(forName: NSWindow.didChangeOcclusionStateNotification, object: window,
-                                                queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.visibilityChanged() }
-            })
-        }
-
-        private func visibilityChanged() {
-            let isVisible = window?.occlusionState.contains(.visible) ?? false
-            if isVisible && !wasVisible {
-                onShow()
-            }
-            wasVisible = isVisible
         }
     }
 }

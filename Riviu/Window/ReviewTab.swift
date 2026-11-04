@@ -11,7 +11,6 @@ struct ReviewTab: View {
     let settings: AppSettings
 
     @State private var workspace: ReviewWorkspace?
-    @State private var timesShown = 0
     @SceneStorage("openPullRequest") private var savedPullRequest = ""
     @Environment(\.openWindow) private var openWindow
 
@@ -25,19 +24,9 @@ struct ReviewTab: View {
                             tabs.register(workspace, window: window)
                         } onBecomeKey: {
                             tabs.didBecomeKey(workspace)
-                        } onShow: {
-                            timesShown += 1
                         } onClose: {
                             tabs.didClose(workspace)
                         }
-                    }
-                    // Switching tabs swaps windows at once, so the tab's content fades up to show it changed.
-                    .phaseAnimator([true, false], trigger: timesShown) { content, isSettled in
-                        content
-                            .opacity(isSettled ? 1 : 0.25)
-                            .offset(y: isSettled ? 0 : 6)
-                    } animation: { isSettled in
-                        isSettled ? .easeOut(duration: 0.22) : nil
                     }
                     .onChange(of: workspace.pullRequest?.reference) { _, reference in
                         savedPullRequest = reference?.id ?? ""
