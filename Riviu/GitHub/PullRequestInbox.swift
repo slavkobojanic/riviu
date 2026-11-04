@@ -47,6 +47,7 @@ final class PullRequestInbox {
                 guard !Task.isCancelled else { return }
                 pullRequests = results
                 errorMessage = nil
+                await account.repositories.prefetch(results, client: client)
                 remember(repositories: results.map(\.repository))
             } catch is CancellationError {
                 return

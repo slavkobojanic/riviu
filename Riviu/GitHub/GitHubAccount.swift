@@ -17,6 +17,8 @@ final class GitHubAccount {
     /// The most recent sign-in problem, shown next to the sign-in buttons.
     var errorMessage: String?
 
+    /// Riviu's clones of the repositories being reviewed.
+    @ObservationIgnored let repositories = LocalRepositories()
     @ObservationIgnored private let keychain = KeychainStore(service: "Riviu")
     @ObservationIgnored private let tokenAccount = "github-token"
 
@@ -36,7 +38,7 @@ final class GitHubAccount {
     var isSignedIn: Bool { user != nil }
 
     var loader: PullRequestLoader {
-        PullRequestLoader(client: client)
+        PullRequestLoader(client: client, repositories: repositories)
     }
 
     /// Checks the token with GitHub, then saves it.

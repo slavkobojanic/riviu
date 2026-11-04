@@ -63,6 +63,7 @@ final class ReviewRequestWatcher {
         do {
             requests = try await client.searchPullRequests(PullRequestQuery()) // open, review requested from me
             errorMessage = nil
+            await account.repositories.prefetch(requests, client: client)
         } catch {
             errorMessage = error.localizedDescription
             return

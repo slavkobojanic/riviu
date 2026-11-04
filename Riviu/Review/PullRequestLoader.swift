@@ -26,6 +26,8 @@ nonisolated struct PullRequestLoader: Sendable {
 
     /// nil when not signed in to GitHub.
     let client: GitHubClient?
+    /// Riviu's clones, read before asking the API.
+    let repositories: LocalRepositories
 
     func pullRequest(_ reference: PullRequestReference) async throws -> PullRequest {
         guard let client else { throw LoadError.notSignedIn }
@@ -33,7 +35,7 @@ nonisolated struct PullRequestLoader: Sendable {
         async let details = client.pullRequest(repository: reference.repository, number: reference.number)
         async let files = client.changedFiles(repository: reference.repository, number: reference.number)
         let pullRequest = try await details
-        let mergeBase = try await client.mergeBase(repository: reference.repository, base: pullRequest.base.sha, head: pullRequest.head.sha)
+        let mergeBase = try await mergeBase(of: pullRequest, reference: reference, client: client)
 
         return PullRequest(
             reference: reference,
@@ -49,6 +51,24 @@ nonisolated struct PullRequestLoader: Sendable {
         )
     }
 
+    /// From the local clone when it has both commits, otherwise from the API.
+    private func mergeBase(of pullRequest: GitHubPullRequest, reference: PullRequestReference, client: GitHubClient) async throws -> String {
+        let repository = reference.repository
+        if await repositories.prepare(pullRequest, number: reference.number, repository: repository, client: client),
+           let mergeBase = try? await repositories.mergeBase(of: pullRequest.base.sha, and: pullRequest.head.sha, in: repository) {
+            return mergeBase
+        }
+        return try await client.mergeBase(repository: repository, base: pullRequest.base.sha, head: pullRequest.head.sha)
+    }
+
+    /// A file at a commit, from the local clone when it's there, otherwise from the API.
+    private func fileContents(of path: String, at commit: String, in repository: String, client: GitHubClient) async throws -> Data {
+        if let data = try? await repositories.contents(of: path, at: commit, in: repository, token: client.token) {
+            return data
+        }
+        return try await client.fileContents(repository: repository, path: path, ref: commit)
+    }
+
     /// Downloads both versions of a file and diffs them. `baseSHA` defaults to the pull request's base.
     func content(of file: ChangedFile, in pullRequest: PullRequest, baseSHA: String? = nil) async throws -> FileContent {
         guard let client else { throw LoadError.notSignedIn }
@@ -56,10 +76,10 @@ nonisolated struct PullRequestLoader: Sendable {
 
         async let base = file.status == .added
             ? Data()
-            : client.fileContents(repository: repository, path: file.previousPath ?? file.path, ref: baseSHA ?? pullRequest.baseSHA)
+            : fileContents(of: file.previousPath ?? file.path, at: baseSHA ?? pullRequest.baseSHA, in: repository, client: client)
         async let head = file.status == .deleted
             ? Data()
-            : client.fileContents(repository: repository, path: file.path, ref: pullRequest.headSHA)
+            : fileContents(of: file.path, at: pullRequest.headSHA, in: repository, client: client)
         let (baseData, headData) = try await (base, head)
 
         if isBinary(baseData) || isBinary(headData) {
@@ -75,8 +95,8 @@ nonisolated struct PullRequestLoader: Sendable {
         guard let client else { return [] }
         var guidelines: [RepositoryGuideline] = []
         for path in RepositoryGuideline.paths {
-            guard let data = try? await client.fileContents(repository: pullRequest.reference.repository, path: path,
-                                                            ref: pullRequest.headSHA) else { continue }
+            guard let data = try? await fileContents(of: path, at: pullRequest.headSHA, in: pullRequest.reference.repository,
+                                                     client: client) else { continue }
             let text = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
             if !text.isEmpty {
                 guidelines.append(RepositoryGuideline(path: path, text: String(text.prefix(RepositoryGuideline.maxCharacters))))
