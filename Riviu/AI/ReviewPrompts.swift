@@ -81,6 +81,30 @@ enum ReviewPrompts {
         return AIRequest(system: system, messages: [AIMessage(role: .user, text: question)])
     }
 
+    /// Rewrites a rough review comment into a clear one, in the reviewer's own voice.
+    static func polishRequest(draft: String, comment: ReviewComment, examples: [String]) -> AIRequest {
+        var system = """
+        You edit code review comments. Rewrite the reviewer's rough note so it is clear, kind and actionable. \
+        Start with a label in bold: **issue:**, **suggestion:**, **question:** or **nit:**. Keep every point the note makes \
+        and add no new ones. Never make it longer than it needs to be, and never more than twice the length of the note. \
+        If the fix is a small change to the code below, add it as a ```suggestion block containing the full replacement lines. \
+        Reply with only the comment, in Markdown.
+        """
+        if !examples.isEmpty {
+            system += "\n\nMatch the tone of the reviewer's earlier comments:\n" + examples.map { "- \($0)" }.joined(separator: "\n")
+        }
+        let question = """
+        The comment is on \(comment.lineLabel) of \(comment.filePath):
+        ```
+        \(comment.code)
+        ```
+
+        The reviewer's note:
+        \(draft)
+        """
+        return AIRequest(system: system, messages: [AIMessage(role: .user, text: question)])
+    }
+
     static func continueInChatMessage(target: CodeTarget) -> String {
         "Explain \(target.label) of `\(target.filePath)`:\n```\n\(target.code)\n```"
     }

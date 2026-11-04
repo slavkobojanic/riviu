@@ -9,6 +9,9 @@ struct CommentComposer: View {
     @State private var draft = ""
     @State private var selection: TextSelection?
     @State private var showsPreview = true
+    @State private var polished: String?
+    @State private var isPolishing = false
+    @State private var polishError: String?
     @FocusState private var isEditorFocused: Bool
 
     var body: some View {
@@ -16,8 +19,15 @@ struct CommentComposer: View {
             header
             formattingBar
             editor
-            if showsPreview && !isDraftEmpty {
+            if let polished {
+                PolishedComment(original: draft, polished: polished,
+                                onUse: { draft = polished; self.polished = nil },
+                                onDiscard: { self.polished = nil })
+            } else if showsPreview && !isDraftEmpty {
                 preview
+            }
+            if let polishError {
+                AIErrorView(message: polishError)
             }
             footer
         }
@@ -57,6 +67,10 @@ struct CommentComposer: View {
                 formatButton("Bulleted List", symbol: "list.bullet") { prefixCurrentLine(with: "- ") }
                 formatButton("Quote", symbol: "text.quote") { prefixCurrentLine(with: "> ") }
                 Spacer()
+                Button(isPolishing ? "Polishing…" : "Polish", systemImage: "wand.and.sparkles", action: polish)
+                    .disabled(isDraftEmpty || isPolishing)
+                    .help("Rewrite this note as a clear, labelled comment with AI (⌥⌘P)")
+                    .keyboardShortcut("p", modifiers: [.command, .option])
                 Button("Suggest Change", systemImage: "plus.forwardslash.minus") {
                     insertBlock("```suggestion\n\(comment.code)\n```\n")
                 }
@@ -116,6 +130,19 @@ struct CommentComposer: View {
             .help(title)
     }
 
+    private func polish() {
+        isPolishing = true
+        polishError = nil
+        Task {
+            do {
+                polished = try await workspace.polish(draft, for: comment)
+            } catch {
+                polishError = error.localizedDescription
+            }
+            isPolishing = false
+        }
+    }
+
     // MARK: - Editing the draft
 
     private var selectedRange: Range<String.Index>? {
@@ -154,5 +181,42 @@ struct CommentComposer: View {
     private func finishEdit() {
         selection = nil
         isEditorFocused = true
+    }
+}
+
+/// The AI's rewrite next to your note, so you can compare before using it.
+private struct PolishedComment: View {
+    let original: String
+    let polished: String
+    let onUse: () -> Void
+    let onDiscard: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 10) {
+                column(title: "Your note", markdown: original)
+                column(title: "Polished", markdown: polished)
+            }
+            HStack {
+                Spacer()
+                Button("Keep Mine", action: onDiscard)
+                    .buttonStyle(.glass)
+                Button("Use Polished", action: onUse)
+                    .buttonStyle(.glassProminent)
+            }
+            .controlSize(.small)
+        }
+        .padding(10)
+        .background(.purple.opacity(0.08), in: .rect(cornerRadius: 10))
+    }
+
+    private func column(title: String, markdown: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+            StructuredText(markdown: markdown)
+                .textual.textSelection(.enabled)
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 }

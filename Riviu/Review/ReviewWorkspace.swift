@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import RiviuAI
 import RiviuDiff
 import RiviuGitHub
 import RiviuSyntax
@@ -627,6 +628,18 @@ final class ReviewWorkspace {
             comment.isEditing = false
             comment.isNew = false
         }
+    }
+
+    /// An AI rewrite of a draft comment, in the tone of your earlier comments on this pull request.
+    func polish(_ draft: String, for comment: ReviewComment) async throws -> String {
+        let login = account.user?.login
+        let examples = threads.flatMap(\.allComments)
+            .filter { login != nil && $0.author?.login == login }
+            .suffix(5)
+            .map { String($0.body.prefix(300)) }
+        let provider = try AISetup.makeProvider(for: .chat, settings: settings)
+        let request = ReviewPrompts.polishRequest(draft: draft, comment: comment, examples: Array(examples))
+        return try await provider.reply(to: request).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     func editComment(_ id: UUID) {
