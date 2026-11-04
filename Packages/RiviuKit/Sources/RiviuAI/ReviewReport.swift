@@ -42,6 +42,45 @@ public struct ReviewReport: Decodable, Sendable, Equatable {
         }
     }
 
+    /// Whether the change does what its description and linked issues ask for.
+    public struct SpecCheck: Codable, Sendable, Equatable {
+        public enum Status: String, Codable, Sendable {
+            case addressed, partial, missing
+        }
+
+        public struct Goal: Codable, Sendable, Equatable {
+            public let goal: String
+            public let status: Status
+            /// Where it's done, or what's missing.
+            public let note: String
+
+            public init(goal: String, status: Status, note: String) {
+                self.goal = goal
+                self.status = status
+                self.note = note
+            }
+        }
+
+        public let goals: [Goal]
+        /// Changes nobody asked for.
+        public let unrequested: [String]
+        /// Set when the description is too thin to check against.
+        public let tooVagueToCheck: Bool?
+
+        public init(goals: [Goal], unrequested: [String], tooVagueToCheck: Bool? = nil) {
+            self.goals = goals
+            self.unrequested = unrequested
+            self.tooVagueToCheck = tooVagueToCheck
+        }
+    }
+
+    /// Something only the author can answer, on a line.
+    public struct Question: Decodable, Sendable, Equatable {
+        public let file: String
+        public let line: Int
+        public let question: String
+    }
+
     public enum ParseError: LocalizedError {
         case noJSON
         case invalid(String)
@@ -58,6 +97,8 @@ public struct ReviewReport: Decodable, Sendable, Equatable {
     public let summary: String
     public let risk: Level
     public let findings: [Finding]
+    public let specCheck: SpecCheck?
+    public let questions: [Question]?
 
     /// Tells the model exactly what to reply with.
     public static let formatInstructions = """
@@ -65,6 +106,12 @@ public struct ReviewReport: Decodable, Sendable, Equatable {
     {
       "summary": "Markdown: what the pull request does and anything a reviewer should look at first. At most 150 words.",
       "risk": "low" | "medium" | "high",
+      "specCheck": {
+        "goals": [{"goal": "One thing the description or a linked issue asks for", "status": "addressed" | "partial" | "missing", "note": "Where it is done, or what is missing. At most 25 words."}],
+        "unrequested": ["A change nobody asked for, in at most 20 words"],
+        "tooVagueToCheck": false
+      },
+      "questions": [{"file": "path/of/the/file", "line": 42, "question": "Something only the author can answer"}],
       "findings": [
         {
           "file": "path/of/the/file",
@@ -82,6 +129,10 @@ public struct ReviewReport: Decodable, Sendable, Equatable {
     Every other line is numbered in the new file. "endLine" is optional, for a finding that spans several lines.
     Add "suggestion" only for a small, certain fix to new-file lines from one hunk; keep the original indentation. Only report real problems: bugs, security issues, missing tests for risky code,
     and confusing code. Return an empty findings list if there are none.
+    For specCheck, list each goal from the description and linked issues (at most 6). If the description is too thin to
+    check against, set "tooVagueToCheck": true and leave goals empty rather than guessing. List unrequested changes only
+    when they are real behaviour changes. Ask at most 3 questions, only about intent or context the diff can't answer,
+    each on a new-file line; ask none if nothing is unclear.
     """
 
     /// Reads the JSON object out of a reply, ignoring any text or code fence around it.

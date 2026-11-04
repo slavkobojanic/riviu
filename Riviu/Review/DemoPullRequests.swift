@@ -1,4 +1,5 @@
 import Foundation
+import RiviuAI
 import RiviuDiff
 
 /// Built-in example pull requests, for trying Riviu without signing in to GitHub.
@@ -43,9 +44,44 @@ nonisolated enum DemoPullRequests {
     static let reviews: [AIReview] = all.map { pullRequest in
         let paths = Set(pullRequest.files.map(\.path))
         let (summary, risk) = reviewSummaries[pullRequest.number] ?? ("", .low)
-        return AIReview(pullRequest: pullRequest.reference, headSHA: pullRequest.headSHA, createdAt: .now,
-                        author: "Example review", summary: summary, risk: risk,
-                        findings: findings.filter { paths.contains($0.filePath) })
+        var review = AIReview(pullRequest: pullRequest.reference, headSHA: pullRequest.headSHA, createdAt: .now,
+                              author: "Example review", summary: summary, risk: risk,
+                              findings: findings.filter { paths.contains($0.filePath) })
+        review.specCheck = specChecks[pullRequest.number]
+        review.questions = (questions[pullRequest.number] ?? []).compactMap(question)
+        return review
+    }
+
+    private static let specChecks: [Int: ReviewReport.SpecCheck] = [
+        482: .init(goals: [
+            .init(goal: "Only one token refresh runs at a time", status: .partial,
+                  note: "Concurrent callers share `inflightRefresh`, but it's cleared before the keychain write finishes."),
+            .init(goal: "The diff parser handles single-line hunks", status: .addressed, note: "`DiffParser.hunkHeader` treats a missing count as 1."),
+            .init(goal: "The legacy cache is removed", status: .partial, note: "`OldCache.swift` is deleted but two callers remain."),
+        ], unrequested: ["Adds a 10,000-line generated test fixture."]),
+        479: .init(goals: [
+            .init(goal: "Pull request lists are cached with ETags", status: .addressed, note: "`client.ts` sends `If-None-Match` and reuses cached bodies on 304."),
+            .init(goal: "Review submission errors are surfaced", status: .addressed, note: "`ReviewPanel` shows the error returned by `submitReview`."),
+            .init(goal: "A new ReviewPanel component", status: .addressed, note: "Added in `ReviewPanel.tsx`."),
+        ], unrequested: ["Raises the default page size in `config/riviu.json`."]),
+        471: .init(goals: [
+            .init(goal: "The webhook handler rejects events when its queue is full", status: .addressed, note: "Returns 503 from a non-blocking `select`."),
+            .init(goal: "Review sync follows pagination", status: .partial, note: "Follows `next` links but ignores rate-limit headers."),
+            .init(goal: "diff-core gains tests", status: .addressed, note: "New tests in `lib.rs`."),
+        ], unrequested: ["Signature checks now use a constant-time comparison.", "Request bodies are capped at 1 MB."]),
+    ]
+
+    private static let questions: [Int: [(path: String, match: String, question: String)]] = [
+        482: [("Sources/Auth/TokenStore.swift", "defer { inflightRefresh = nil }",
+               "Should callers that arrive during the keychain write wait for it, or is a second refresh acceptable?")],
+        479: [("web/src/api/client.ts", "if (etag) this.etags.set", "Should cached ETags be cleared when the user signs out?")],
+        471: [("services/webhook/handler.go", "case h.Queue <- event:",
+               "GitHub doesn't redeliver after a 503. Is losing these events acceptable, or should they be retried from the sync job?")],
+    ]
+
+    private static func question(_ demo: (path: String, match: String, question: String)) -> AuthorQuestion? {
+        guard let line = fileDiff(at: demo.path)?.headLines.firstIndex(where: { $0.contains(demo.match) }) else { return nil }
+        return AuthorQuestion(filePath: demo.path, lineIndex: line, question: demo.question)
     }
 
     private static let reviewSummaries: [Int: (String, ReviewFinding.Severity)] = [

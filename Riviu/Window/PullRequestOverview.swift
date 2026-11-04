@@ -1,3 +1,4 @@
+import RiviuAI
 import RiviuGitHub
 import RiviuMarkdown
 import SwiftUI
@@ -18,6 +19,14 @@ struct PullRequestOverview: View {
                         .foregroundStyle(.orange)
                 }
                 AISummaryCard(pullRequest: pullRequest, aiReviews: aiReviews)
+                if let review = currentReview {
+                    if let specCheck = review.specCheck {
+                        SpecCheckSection(specCheck: specCheck)
+                    }
+                    if let questions = review.questions, !questions.isEmpty {
+                        QuestionsSection(questions: questions, workspace: workspace)
+                    }
+                }
                 if !workspace.findings.isEmpty {
                     FindingsSection(findings: workspace.findings, workspace: workspace)
                 }
@@ -31,6 +40,12 @@ struct PullRequestOverview: View {
             .padding(.vertical, 28)
             .frame(maxWidth: .infinity)
         }
+    }
+
+    /// The finished review, hidden while a new one is running.
+    private var currentReview: AIReview? {
+        guard aiReviews.activity(for: pullRequest.reference) == nil else { return nil }
+        return aiReviews.review(for: pullRequest.reference)
     }
 }
 
@@ -189,6 +204,92 @@ private struct FindingRow: View {
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
         .help("Open \(finding.filePath)")
+    }
+}
+
+/// Does the change do what its description and linked issues ask for?
+private struct SpecCheckSection: View {
+    let specCheck: ReviewReport.SpecCheck
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Does It Do What It Says?")
+                .font(.title3.weight(.semibold))
+            if specCheck.tooVagueToCheck == true || specCheck.goals.isEmpty {
+                Label("The description is too thin to check the change against.", systemImage: "questionmark.circle")
+            }
+            ForEach(specCheck.goals, id: \.goal) { goal in
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Image(systemName: symbol(for: goal.status))
+                        .foregroundStyle(color(for: goal.status))
+                        .help(goal.status.rawValue.capitalized)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(goal.goal)
+                            .font(.headline)
+                        InlineText(markdown: goal.note)
+                            .font(.callout)
+                    }
+                }
+            }
+            if !specCheck.unrequested.isEmpty {
+                Text("Not asked for")
+                    .font(.headline)
+                    .padding(.top, 4)
+                ForEach(specCheck.unrequested, id: \.self) { change in
+                    Label {
+                        InlineText(markdown: change)
+                    } icon: {
+                        Image(systemName: "plus.circle")
+                            .foregroundStyle(.purple)
+                    }
+                    .font(.callout)
+                }
+            }
+        }
+    }
+
+    private func symbol(for status: ReviewReport.SpecCheck.Status) -> String {
+        switch status {
+        case .addressed: "checkmark.circle.fill"
+        case .partial: "circle.lefthalf.filled"
+        case .missing: "xmark.circle.fill"
+        }
+    }
+
+    private func color(for status: ReviewReport.SpecCheck.Status) -> Color {
+        switch status {
+        case .addressed: .green
+        case .partial: .orange
+        case .missing: .red
+        }
+    }
+}
+
+/// Things only the author can answer. Asking one opens a comment on its line.
+private struct QuestionsSection: View {
+    let questions: [AuthorQuestion]
+    let workspace: ReviewWorkspace
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Questions for the Author")
+                .font(.title3.weight(.semibold))
+            ForEach(questions) { question in
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    Image(systemName: "questionmark.bubble")
+                    VStack(alignment: .leading, spacing: 2) {
+                        InlineText(markdown: question.question)
+                        Text("\((question.filePath as NSString).lastPathComponent) · line \(question.lineIndex + 1)")
+                            .font(.caption.monospaced())
+                    }
+                    Spacer(minLength: 8)
+                    Button("Ask") { workspace.ask(question) }
+                        .buttonStyle(.glass)
+                        .controlSize(.small)
+                        .help("Open a comment with this question on its line")
+                }
+            }
+        }
     }
 }
 

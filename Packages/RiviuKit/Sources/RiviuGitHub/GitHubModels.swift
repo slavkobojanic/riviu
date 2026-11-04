@@ -58,6 +58,12 @@ public struct GitHubPullRequest: Decodable, Sendable {
     public let mergedAt: Date?
 }
 
+public struct GitHubIssue: Decodable, Sendable {
+    public let number: Int
+    public let title: String
+    public let body: String?
+}
+
 /// One file changed by a pull request.
 public struct GitHubChangedFile: Decodable, Sendable {
     public let filename: String

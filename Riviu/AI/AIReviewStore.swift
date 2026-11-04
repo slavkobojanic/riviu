@@ -16,6 +16,18 @@ nonisolated struct AIReview: Codable, Sendable {
     var findings: [ReviewFinding]
     /// The repository's guideline files the review followed, like "CLAUDE.md".
     var guidelineFiles: [String]?
+    var specCheck: ReviewReport.SpecCheck?
+    var questions: [AuthorQuestion]?
+}
+
+/// Something only the author can answer, which the reviewer can ask as a comment.
+nonisolated struct AuthorQuestion: Codable, Sendable, Identifiable, Hashable {
+    let filePath: String
+    /// 0-based, in the new file.
+    let lineIndex: Int
+    let question: String
+
+    var id: String { "\(filePath):\(lineIndex):\(question)" }
 }
 
 /// AI reviews, saved to disk so a review run in the background is ready when its pull request is opened.
@@ -91,9 +103,11 @@ final class AIReviewStore {
         activities[reference] = .reviewing(author: author)
         do {
             let provider = try AISetup.makeProvider(for: .review, settings: settings)
-            let guidelines = await account.loader.repositoryGuidelines(for: pullRequest)
+            async let fetchedGuidelines = account.loader.repositoryGuidelines(for: pullRequest)
+            async let linkedIssues = account.loader.linkedIssues(for: pullRequest)
+            let guidelines = await fetchedGuidelines
             let request = ReviewPrompts.reviewRequest(instructions: settings.reviewInstructions, pullRequest: pullRequest,
-                                                      guidelines: guidelines)
+                                                      guidelines: guidelines, linkedIssues: await linkedIssues)
             let report = try ReviewReport.parse(try await provider.reply(to: request))
             var review = AIReview(pullRequest: pullRequest, report: report, author: author)
             review.guidelineFiles = guidelines.map(\.path)
@@ -140,6 +154,11 @@ extension AIReview {
         self.author = author
         summary = report.summary
         risk = ReviewFinding.Severity(report.risk)
+        specCheck = report.specCheck
+        questions = (report.questions ?? []).prefix(3).compactMap { question in
+            guard pullRequest.file(at: question.file) != nil, question.line > 0 else { return nil }
+            return AuthorQuestion(filePath: question.file, lineIndex: question.line - 1, question: question.question)
+        }
         findings = report.findings.enumerated().compactMap { number, finding in
             guard let file = pullRequest.file(at: finding.file), finding.line > 0 else { return nil }
             var result = ReviewFinding(id: "\(pullRequest.headSHA):\(number)", filePath: finding.file,

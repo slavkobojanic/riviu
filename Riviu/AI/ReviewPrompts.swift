@@ -1,5 +1,6 @@
 import RiviuAI
 import RiviuDiff
+import RiviuGitHub
 
 /// The instructions and context sent to the AI provider.
 enum ReviewPrompts {
@@ -50,7 +51,8 @@ enum ReviewPrompts {
     }
 
     /// Asks for a summary and line-level findings, as JSON that `ReviewReport.parse` reads.
-    static func reviewRequest(instructions: String, pullRequest: PullRequest, guidelines: [RepositoryGuideline] = []) -> AIRequest {
+    static func reviewRequest(instructions: String, pullRequest: PullRequest, guidelines: [RepositoryGuideline] = [],
+                              linkedIssues: [GitHubIssue] = []) -> AIRequest {
         var system = instructions
         if !guidelines.isEmpty {
             system += "\n\nThe repository has its own guidelines. Follow them, and flag code that breaks them:"
@@ -59,15 +61,16 @@ enum ReviewPrompts {
             }
         }
         system += "\n\n" + ReviewReport.formatInstructions
-        let question = [
+        var question = [
             "Review pull request \(pullRequest.reference.id): \(pullRequest.title)",
             "Author: \(pullRequest.author) · \(pullRequest.headBranch) → \(pullRequest.baseBranch)",
             "Description: \(pullRequest.summary.isEmpty ? "(none)" : pullRequest.summary)",
-            "",
-            "Diffs:",
-            diffs(for: pullRequest, putFirst: nil, numbered: true),
-        ].joined(separator: "\n")
-        return AIRequest(system: system, messages: [AIMessage(role: .user, text: question)])
+        ]
+        for issue in linkedIssues {
+            question += ["", "Linked issue #\(issue.number): \(issue.title)", String((issue.body ?? "").prefix(3_000))]
+        }
+        question += ["", "Diffs:", diffs(for: pullRequest, putFirst: nil, numbered: true)]
+        return AIRequest(system: system, messages: [AIMessage(role: .user, text: question.joined(separator: "\n"))])
     }
 
     static func explainRequest(instructions: String, length: ExplanationLength, target: CodeTarget,

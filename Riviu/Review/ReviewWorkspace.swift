@@ -585,6 +585,17 @@ final class ReviewWorkspace {
     }
 
     /// Opens a comment with the finding's text, and its suggested fix as a GitHub suggestion.
+    /// Opens the question's line with a comment that asks it.
+    func ask(_ question: AuthorQuestion) {
+        reveal(lineIndex: question.lineIndex, on: .head, inFileAt: question.filePath)
+        var code = ""
+        if case let .loaded(diff) = fileContents[question.filePath], diff.headLines.indices.contains(question.lineIndex) {
+            code = diff.headLines[question.lineIndex]
+        }
+        startComment(on: CodeTarget(filePath: question.filePath, side: .head, lines: question.lineIndex...question.lineIndex, code: code),
+                     body: "**question:** \(question.question)")
+    }
+
     func turnFindingIntoComment(_ finding: ReviewFinding) {
         guard let diff = selectedFileDiff, diff.path == finding.filePath else { return }
         let fileLines = diff.lines(on: finding.side)

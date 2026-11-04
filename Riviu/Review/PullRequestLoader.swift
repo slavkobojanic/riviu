@@ -95,6 +95,20 @@ nonisolated struct PullRequestLoader: Sendable {
         return guidelines
     }
 
+    /// Issues the description says it fixes ("Fixes #12"), up to three.
+    func linkedIssues(for pullRequest: PullRequest) async -> [GitHubIssue] {
+        guard let client, !pullRequest.reference.isDemo else { return [] }
+        let pattern = #/(?i)\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)/#
+        let numbers = pullRequest.summary.matches(of: pattern).compactMap { Int($0.1) }
+        var issues: [GitHubIssue] = []
+        for number in Array(Set(numbers)).sorted().prefix(3) {
+            if let issue = try? await client.issue(repository: pullRequest.reference.repository, number: number) {
+                issues.append(issue)
+            }
+        }
+        return issues
+    }
+
     private func changedFile(_ file: GitHubChangedFile) -> ChangedFile {
         let status: ChangeStatus = switch file.status {
         case "added": .added

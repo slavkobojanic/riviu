@@ -47,3 +47,23 @@ struct ReviewReportSuggestionTests {
         #expect(finding.suggestion == "let x = 1")
     }
 }
+
+struct ReviewReportSpecTests {
+    @Test func readsSpecCheckAndQuestions() throws {
+        let reply = """
+        {"summary": "s", "risk": "low", "findings": [],
+         "specCheck": {"goals": [{"goal": "Retry on 503", "status": "partial", "note": "No backoff."}], "unrequested": ["Renames Client"]},
+         "questions": [{"file": "a.go", "line": 3, "question": "Why 5 retries?"}]}
+        """
+        let report = try ReviewReport.parse(reply)
+        #expect(report.specCheck?.goals.first?.status == .partial)
+        #expect(report.specCheck?.unrequested == ["Renames Client"])
+        #expect(report.questions?.first?.line == 3)
+    }
+
+    @Test func olderRepliesWithoutThemStillParse() throws {
+        let report = try ReviewReport.parse(#"{"summary": "s", "risk": "low", "findings": []}"#)
+        #expect(report.specCheck == nil)
+        #expect(report.questions == nil)
+    }
+}

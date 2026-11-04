@@ -75,6 +75,10 @@ public struct GitHubClient: Sendable {
         return comparison.mergeBaseCommit.sha
     }
 
+    public func issue(repository: String, number: Int) async throws -> GitHubIssue {
+        try await get("repos/\(repository)/issues/\(number)")
+    }
+
     /// A file's raw contents at a commit.
     public func fileContents(repository: String, path: String, ref: String) async throws -> Data {
         var components = URLComponents(url: Self.apiURL.appending(path: "repos/\(repository)/contents/\(path)"), resolvingAgainstBaseURL: false)!
