@@ -41,13 +41,13 @@ struct PullRequestList: View {
                 Picker("Show", selection: $inbox.query.involvement) {
                     ForEach(PullRequestQuery.Involvement.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
-                .fixedSize()
+                .frame(maxWidth: .infinity)
                 Picker("Repository", selection: $inbox.query.repository) {
                     Text("All repositories").tag(String?.none)
                     Divider()
                     ForEach(inbox.knownRepositories, id: \.self) { Text($0).tag(String?.some($0)) }
                 }
-                Spacer(minLength: 0)
+                .frame(maxWidth: .infinity)
             }
             .labelsHidden()
             Picker("State", selection: $inbox.query.state) {
@@ -55,6 +55,7 @@ struct PullRequestList: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
+            .frame(maxWidth: .infinity)
             TextField("Search, e.g. label:bug", text: $searchText)
                 .textFieldStyle(.roundedBorder)
                 .onSubmit { inbox.query.text = searchText }
