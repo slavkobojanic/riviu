@@ -7,18 +7,24 @@ struct SettingsView: View {
     let watcher: ReviewRequestWatcher
     let rules: ReviewRuleStore
 
+    #if DEBUG
+    @State private var tab = UserDefaults.standard.string(forKey: "debugSettings") ?? "General"
+    #else
+    @State private var tab = "General"
+    #endif
+
     var body: some View {
-        TabView {
-            Tab("General", systemImage: "gearshape") {
+        TabView(selection: $tab) {
+            Tab("General", systemImage: "gearshape", value: "General") {
                 GeneralSettingsTab(settings: settings)
             }
-            Tab("Editor", systemImage: "textformat") {
+            Tab("Editor", systemImage: "textformat", value: "Editor") {
                 EditorSettingsTab(settings: settings)
             }
-            Tab("AI", systemImage: "sparkles") {
+            Tab("AI", systemImage: "sparkles", value: "AI") {
                 AISettingsTab(settings: settings, rules: rules)
             }
-            Tab("GitHub", systemImage: "person.crop.circle") {
+            Tab("GitHub", systemImage: "person.crop.circle", value: "GitHub") {
                 GitHubSettingsTab(settings: settings, account: account, watcher: watcher)
             }
         }

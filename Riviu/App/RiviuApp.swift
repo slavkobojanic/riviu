@@ -39,7 +39,7 @@ struct RiviuApp: App {
         }
         watcher.start()
         #if DEBUG
-        DebugLaunch.run(tabs: tabs, account: account, aiReviews: aiReviews)
+        DebugLaunch.run(tabs: tabs, account: account, aiReviews: aiReviews, watcher: watcher)
         #endif
     }
 

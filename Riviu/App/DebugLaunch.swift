@@ -1,13 +1,16 @@
 #if DEBUG
 import AppKit
 import RiviuDiff
+import RiviuGitHub
 import SwiftUI
 
 /// Launch arguments for jumping straight to a pull request while developing, like
 /// `Riviu -debugOpen owner/repo#123 -debugFile Sources/App.swift -debugLine 40`.
 /// `-debugReviewer login` pretends to be someone else for "since your last review", and
 /// `-debugSinceReview YES` turns it on. `-debugHotPath YES` opens the hot path of `-debugLine` in a panel. `-debugTour YES` plans a guided tour with the AI and starts it.
-/// `-debugAlsoOpen owner/repo#124` opens a second pull request in a new tab.
+/// `-debugAlsoOpen owner/repo#124` opens a second pull request in a new tab. `-debugReviewSheet APPROVE` opens the
+/// review sheet. `-debugSettings AI` opens Settings on that tab, and `-debugMenuPanel YES` shows the menu bar panel
+/// in a window.
 enum DebugLaunch {
     /// Keeps the panel alive.
     private static var panel: NSPanel?
@@ -18,12 +21,43 @@ enum DebugLaunch {
                             backing: .buffered, defer: false)
         panel.title = "Hot Path (debug)"
         panel.contentView = NSHostingView(rootView: HotPathPopover(target: target, workspace: workspace) {})
+        panel.hidesOnDeactivate = false
         panel.makeKeyAndOrderFront(nil)
         self.panel = panel
     }
 
-    static func run(tabs: ReviewTabs, account: GitHubAccount, aiReviews: AIReviewStore) {
+    private static func showMenuPanel(watcher: ReviewRequestWatcher, account: GitHubAccount, aiReviews: AIReviewStore,
+                                      tabs: ReviewTabs) {
+        let panel = NSPanel(contentRect: CGRect(x: 200, y: 200, width: 360, height: 480), styleMask: [.titled, .closable],
+                            backing: .buffered, defer: false)
+        panel.title = "Menu Bar Panel (debug)"
+        panel.contentView = NSHostingView(rootView: MenuBarPanel(watcher: watcher, account: account, aiReviews: aiReviews, tabs: tabs))
+        panel.hidesOnDeactivate = false
+        panel.makeKeyAndOrderFront(nil)
+        self.panel = panel
+    }
+
+    /// Clicks Riviu > Settings… in the menu bar.
+    private static func openSettings() {
+        let appMenu = NSApp.mainMenu?.items.first?.submenu
+        guard let item = appMenu?.items.first(where: { $0.keyEquivalent == "," }), let index = appMenu?.index(of: item) else { return }
+        appMenu?.performActionForItem(at: index)
+    }
+
+    static func run(tabs: ReviewTabs, account: GitHubAccount, aiReviews: AIReviewStore, watcher: ReviewRequestWatcher) {
         let arguments = UserDefaults.standard
+        if arguments.string(forKey: "debugSettings") != nil {
+            Task {
+                try? await Task.sleep(for: .seconds(2))
+                openSettings()
+            }
+        }
+        if arguments.bool(forKey: "debugMenuPanel") {
+            Task {
+                try? await Task.sleep(for: .seconds(2))
+                showMenuPanel(watcher: watcher, account: account, aiReviews: aiReviews, tabs: tabs)
+            }
+        }
         guard let id = arguments.string(forKey: "debugOpen"), let reference = PullRequestReference(id: id) else { return }
         Task {
             while !account.isSignedIn || tabs.frontmost == nil {
@@ -49,6 +83,12 @@ enum DebugLaunch {
                     try? await Task.sleep(for: .milliseconds(100))
                 }
                 workspace.setShowsChangesSinceLastReview(true)
+            }
+            if let verdict = arguments.string(forKey: "debugReviewSheet").flatMap(GitHubReviewSubmission.Event.init(rawValue:)) {
+                while workspace.pullRequest == nil {
+                    try? await Task.sleep(for: .milliseconds(100))
+                }
+                workspace.reviewSheetVerdict = verdict
             }
             guard let path = arguments.string(forKey: "debugFile") else { return }
             while workspace.pullRequest == nil {
