@@ -46,6 +46,23 @@ if [[ $SIGNED == 1 && -n "${CI:-}" ]]; then
     rm "$RUNNER_TEMP/certificate.p12"
     security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" > /dev/null
     security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+    IDENTITIES=$(security find-identity -v -p codesigning "$KEYCHAIN")
+fi
+
+# Sign with the team the Developer ID certificate belongs to, like "Developer ID Application: Name (Q85LP5F7X6)".
+# Notarizing has to use the same team.
+if [[ $SIGNED == 1 ]]; then
+    IDENTITIES=${IDENTITIES:-$(security find-identity -v -p codesigning)}
+    CERTIFICATE_TEAM=$(echo "$IDENTITIES" | sed -n 's/.*"Developer ID Application: .*(\([A-Z0-9]*\))".*/\1/p' | head -1)
+    if [[ -z "$CERTIFICATE_TEAM" ]]; then
+        echo "error: no Developer ID Application certificate found. The .p12 holds:"
+        echo "$IDENTITIES"
+        exit 1
+    fi
+    if [[ -n "${APPLE_TEAM_ID:-}" && "$APPLE_TEAM_ID" != "$CERTIFICATE_TEAM" ]]; then
+        echo "warning: APPLE_TEAM_ID doesn't match the certificate's team; using the certificate's."
+    fi
+    APPLE_TEAM_ID=$CERTIFICATE_TEAM
 fi
 
 echo "Building Riviu $VERSION"

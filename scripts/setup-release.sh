@@ -57,8 +57,8 @@ read -r -p "Apple ID of the developer account [slavkobojanic@icloud.com]: " APPL
 APPLE_ID=${APPLE_ID:-slavkobojanic@icloud.com}
 gh secret set APPLE_ID --repo "$REPOSITORY" --body "$APPLE_ID"
 echo "Team ID: developer.apple.com/account > Membership details."
-read -r -p "Team ID [6ZG9U52KS9]: " TEAM_ID
-TEAM_ID=${TEAM_ID:-6ZG9U52KS9}
+read -r -p "Team ID [Q85LP5F7X6]: " TEAM_ID
+TEAM_ID=${TEAM_ID:-Q85LP5F7X6}
 gh secret set APPLE_TEAM_ID --repo "$REPOSITORY" --body "$TEAM_ID"
 echo "Make an app-specific password at account.apple.com > Sign-In and Security > App-Specific Passwords."
 pause "Make the password."
