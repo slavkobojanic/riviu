@@ -4,6 +4,8 @@ import SwiftUI
 struct FindingCard: View {
     let finding: ReviewFinding
     let workspace: ReviewWorkspace
+    /// Set while writing a "don't flag similar" rule.
+    @State private var ruleDraft: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -27,14 +29,59 @@ struct FindingCard: View {
                 }
                 .help(finding.suggestion == nil ? "Turn this finding into a review comment"
                                                 : "Turn this finding into a review comment the author can commit with one click")
-                Button("Dismiss", systemImage: "xmark") { workspace.dismissFinding(finding) }
+                Menu {
+                    Section("Dismiss because…") {
+                        ForEach(DismissReason.allCases) { reason in
+                            Button(reason.title) { workspace.dismissFinding(finding, reason: reason) }
+                        }
+                    }
+                    Divider()
+                    Button("Don't Flag Similar Findings…") { ruleDraft = "Don't flag: \(finding.title)" }
+                } label: {
+                    Label("Dismiss", systemImage: "xmark")
+                } primaryAction: {
+                    workspace.dismissFinding(finding)
+                }
+                .menuStyle(.button)
+                .fixedSize()
+                .help("Dismiss, or use the arrow to give a reason or stop similar findings in this repository")
             }
             .buttonStyle(.glass)
             .controlSize(.small)
+            if let ruleDraft {
+                RuleEditor(text: ruleDraft,
+                           onSave: { workspace.dismissFinding(finding, addingRule: $0) },
+                           onCancel: { self.ruleDraft = nil })
+            }
         }
         .foregroundStyle(.primary)
         .padding(14)
         .glassEffect(.regular, in: .rect(cornerRadius: 16))
+    }
+}
+
+/// Writing a rule for future AI reviews of this repository.
+private struct RuleEditor: View {
+    @State var text: String
+    let onSave: (String) -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Future AI reviews of this repository will follow this rule. Edit it in Settings → AI.")
+                .font(.caption)
+            HStack(spacing: 8) {
+                TextField("Rule", text: $text)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit { onSave(text) }
+                Button("Cancel", action: onCancel)
+                    .buttonStyle(.glass)
+                Button("Save Rule") { onSave(text) }
+                    .buttonStyle(.glassProminent)
+                    .disabled(text.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+            .controlSize(.small)
+        }
     }
 }
 

@@ -9,6 +9,7 @@ struct RiviuApp: App {
     @State private var workspace: ReviewWorkspace
     @State private var chats: ChatStore
     @State private var aiReviews: AIReviewStore
+    @State private var rules: ReviewRuleStore
     @State private var watcher: ReviewRequestWatcher
     private let notifications = ReviewRequestNotifications()
     private let mainWindow = MainWindow()
@@ -19,12 +20,14 @@ struct RiviuApp: App {
         _settings = State(initialValue: settings)
         _account = State(initialValue: account)
         let inbox = PullRequestInbox(account: account)
-        let aiReviews = AIReviewStore(settings: settings, account: account, demoReviews: DemoPullRequests.reviews)
-        let workspace = ReviewWorkspace(settings: settings, account: account, aiReviews: aiReviews)
+        let rules = ReviewRuleStore()
+        let aiReviews = AIReviewStore(settings: settings, account: account, rules: rules, demoReviews: DemoPullRequests.reviews)
+        let workspace = ReviewWorkspace(settings: settings, account: account, aiReviews: aiReviews, rules: rules)
         let watcher = ReviewRequestWatcher(account: account, settings: settings, aiReviews: aiReviews, inbox: inbox,
                                            notifications: notifications)
         _inbox = State(initialValue: inbox)
         _aiReviews = State(initialValue: aiReviews)
+        _rules = State(initialValue: rules)
         _workspace = State(initialValue: workspace)
         _watcher = State(initialValue: watcher)
         _chats = State(initialValue: ChatStore(makeProvider: { try AISetup.makeProvider(for: .chat, settings: settings) }))
@@ -61,7 +64,7 @@ struct RiviuApp: App {
         .menuBarExtraStyle(.window)
 
         Settings {
-            SettingsView(settings: settings, account: account, watcher: watcher)
+            SettingsView(settings: settings, account: account, watcher: watcher, rules: rules)
                 .environment(settings)
         }
     }

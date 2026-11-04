@@ -47,11 +47,13 @@ final class AIReviewStore {
 
     @ObservationIgnored private let settings: AppSettings
     @ObservationIgnored private let account: GitHubAccount
+    @ObservationIgnored private let rules: ReviewRuleStore
     @ObservationIgnored private let fileURL = URL.applicationSupportDirectory.appending(path: "Riviu/ai-reviews.json")
 
-    init(settings: AppSettings, account: GitHubAccount, demoReviews: [AIReview]) {
+    init(settings: AppSettings, account: GitHubAccount, rules: ReviewRuleStore, demoReviews: [AIReview]) {
         self.settings = settings
         self.account = account
+        self.rules = rules
         load()
         for review in demoReviews {
             reviews[review.pullRequest] = review
@@ -110,7 +112,8 @@ final class AIReviewStore {
             let guidelines = await fetchedGuidelines
             let earlier = await previous
             let request = ReviewPrompts.reviewRequest(instructions: settings.reviewInstructions, pullRequest: pullRequest,
-                                                      guidelines: guidelines, linkedIssues: await linkedIssues, previous: earlier)
+                                                      guidelines: guidelines, linkedIssues: await linkedIssues, previous: earlier,
+                                                      rules: rules.rules(for: reference.repository))
             let report = try ReviewReport.parse(try await provider.reply(to: request))
             var review = AIReview(pullRequest: pullRequest, report: report, author: author)
             if let earlier {

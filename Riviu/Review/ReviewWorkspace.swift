@@ -121,6 +121,7 @@ final class ReviewWorkspace {
     @ObservationIgnored private let settings: AppSettings
     @ObservationIgnored private let account: GitHubAccount
     @ObservationIgnored private let aiReviews: AIReviewStore
+    @ObservationIgnored private let rules: ReviewRuleStore
     @ObservationIgnored private var openTask: Task<Void, Never>?
     /// The pull request's GraphQL ID, needed to mark files as viewed on GitHub.
     @ObservationIgnored private var gitHubPullRequestID: String?
@@ -134,10 +135,11 @@ final class ReviewWorkspace {
     @ObservationIgnored private var locationToRestore: ReviewLocation?
     @ObservationIgnored private var syntaxByPath: [String: (base: SyntaxDocument, head: SyntaxDocument)] = [:]
 
-    init(settings: AppSettings, account: GitHubAccount, aiReviews: AIReviewStore) {
+    init(settings: AppSettings, account: GitHubAccount, aiReviews: AIReviewStore, rules: ReviewRuleStore) {
         self.settings = settings
         self.account = account
         self.aiReviews = aiReviews
+        self.rules = rules
     }
 
     var selectedFile: ChangedFile? {
@@ -728,10 +730,21 @@ final class ReviewWorkspace {
         lineToReveal = LineToReveal(side: side, lineIndex: lineIndex)
     }
 
-    func dismissFinding(_ finding: ReviewFinding) {
+    /// A reason is remembered, so Riviu can later suggest a rule for this repository.
+    func dismissFinding(_ finding: ReviewFinding, reason: DismissReason? = nil) {
         guard let reference = pullRequest?.reference else { return }
+        if let reason {
+            rules.recordDismissal(of: finding, in: reference.repository, reason: reason)
+        }
         aiReviews.dismissFinding(finding.id, in: reference)
         rebuildRows()
+    }
+
+    /// Dismisses a finding and tells future AI reviews of this repository not to flag similar ones.
+    func dismissFinding(_ finding: ReviewFinding, addingRule rule: String) {
+        guard let reference = pullRequest?.reference else { return }
+        rules.addRule(rule, for: reference.repository)
+        dismissFinding(finding, reason: .notAProblem)
     }
 
     /// Opens a comment with the finding's text, and its suggested fix as a GitHub suggestion.

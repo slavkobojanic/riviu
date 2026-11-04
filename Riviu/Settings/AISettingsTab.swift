@@ -5,12 +5,14 @@ import SwiftUI
 
 struct AISettingsTab: View {
     @Bindable var settings: AppSettings
+    let rules: ReviewRuleStore
 
     var body: some View {
         Form {
             ForEach(AITask.allCases) { task in
                 TaskSection(task: task, settings: settings)
             }
+            ReviewRulesSection(rules: rules, settings: settings)
             Section {
                 ForEach(CommandLineTool.allCases, id: \.self) { tool in
                     CommandLineToolRow(tool: tool, settings: settings)

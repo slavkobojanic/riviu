@@ -5,6 +5,7 @@ struct SettingsView: View {
     let settings: AppSettings
     let account: GitHubAccount
     let watcher: ReviewRequestWatcher
+    let rules: ReviewRuleStore
 
     var body: some View {
         TabView {
@@ -15,7 +16,7 @@ struct SettingsView: View {
                 EditorSettingsTab(settings: settings)
             }
             Tab("AI", systemImage: "sparkles") {
-                AISettingsTab(settings: settings)
+                AISettingsTab(settings: settings, rules: rules)
             }
             Tab("GitHub", systemImage: "person.crop.circle") {
                 GitHubSettingsTab(settings: settings, account: account, watcher: watcher)

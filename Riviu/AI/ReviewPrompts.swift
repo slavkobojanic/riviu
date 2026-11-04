@@ -58,8 +58,12 @@ enum ReviewPrompts {
 
     /// Asks for a summary and line-level findings, as JSON that `ReviewReport.parse` reads.
     static func reviewRequest(instructions: String, pullRequest: PullRequest, guidelines: [RepositoryGuideline] = [],
-                              linkedIssues: [GitHubIssue] = [], previous: PreviousReview? = nil) -> AIRequest {
+                              linkedIssues: [GitHubIssue] = [], previous: PreviousReview? = nil, rules: [ReviewRule] = []) -> AIRequest {
         var system = instructions
+        if !rules.isEmpty {
+            system += "\n\nThe reviewer set these rules for this repository. Always follow them:\n"
+                + rules.map { "- \($0.text)" }.joined(separator: "\n")
+        }
         if !guidelines.isEmpty {
             system += "\n\nThe repository has its own guidelines. Follow them, and flag code that breaks them:"
             for guideline in guidelines {
@@ -126,6 +130,21 @@ enum ReviewPrompts {
         \(draft)
         """
         return AIRequest(system: system, messages: [AIMessage(role: .user, text: question)])
+    }
+
+    /// Proposes review rules from the findings someone keeps dismissing in a repository.
+    static func ruleSuggestionRequest(repository: String, dismissals: [Dismissal], existingRules: [ReviewRule]) -> AIRequest {
+        var system = """
+        A code reviewer keeps dismissing some AI review findings in \(repository). Propose at most 3 short rules for \
+        future AI reviews of this repository that would stop the unwanted findings, like "Don't flag force-unwraps in \
+        tests." Only propose a rule when several dismissals share a pattern. Reply with one rule per line, nothing else, \
+        or reply NONE.
+        """
+        if !existingRules.isEmpty {
+            system += "\nRules it already has:\n" + existingRules.map { "- \($0.text)" }.joined(separator: "\n")
+        }
+        let list = dismissals.suffix(60).map { "- \($0.findingTitle) (\($0.reason.title))" }.joined(separator: "\n")
+        return AIRequest(system: system, messages: [AIMessage(role: .user, text: "Dismissed findings:\n\(list)")])
     }
 
     /// Why a CI job failed, given the end of its log and the diff.
