@@ -20,10 +20,18 @@ struct ReviewDetail: View {
         } else if let reference = workspace.loadingReference {
             ProgressView("Loading \(reference.id)…")
         } else if let pullRequest = workspace.pullRequest {
-            if workspace.showsOverview {
-                PullRequestOverview(pullRequest: pullRequest, workspace: workspace, aiReviews: aiReviews)
-            } else {
-                fileContent
+            Group {
+                if workspace.showsOverview {
+                    PullRequestOverview(pullRequest: pullRequest, workspace: workspace, aiReviews: aiReviews)
+                } else {
+                    fileContent
+                }
+            }
+            .overlay(alignment: .bottom) {
+                if let tour = workspace.tour, let position = workspace.tourPosition {
+                    TourBar(tour: tour, position: position, workspace: workspace)
+                        .padding(18)
+                }
             }
         } else {
             ContentUnavailableView("No Pull Request Open", systemImage: "arrow.triangle.pull",

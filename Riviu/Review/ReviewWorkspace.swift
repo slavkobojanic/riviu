@@ -40,6 +40,12 @@ struct ReviewLocation: Equatable {
     let filePath: String?
 }
 
+/// A chapter and stop within it, both 0-based.
+struct TourPosition: Equatable {
+    let chapter: Int
+    let stop: Int
+}
+
 /// What changed since you last reviewed the pull request.
 struct SinceLastReview {
     /// The commit your last review was on.
@@ -82,6 +88,9 @@ final class ReviewWorkspace {
     var expandAll = false {
         didSet { rebuildRows() }
     }
+
+    /// Where the guided tour is, or nil when not touring.
+    private(set) var tourPosition: TourPosition?
 
     /// Collapses hunks that only move, rename or reformat code.
     var hidesCosmeticChanges = false {
@@ -213,6 +222,7 @@ final class ReviewWorkspace {
         syntaxByPath = [:]
         structuralChangesByPath = [:]
         threads = []
+        tourPosition = nil
         sinceLastReview = nil
         showsChangesSinceLastReview = false
         checkRuns = []
@@ -593,6 +603,48 @@ final class ReviewWorkspace {
         } catch {
             syncErrorMessage = "Couldn't reload conversations: \(error.localizedDescription)"
         }
+    }
+
+    // MARK: - Guided tour
+
+    var tour: ReviewTour? {
+        pullRequest.flatMap(aiReviews.tour)
+    }
+
+    var currentTourStop: TourStop? {
+        guard let tour, let tourPosition else { return nil }
+        return tour.chapters[tourPosition.chapter].stops[tourPosition.stop]
+    }
+
+    func startTour(atChapter chapter: Int = 0) {
+        guard let tour, tour.chapters.indices.contains(chapter) else { return }
+        setShowsChangesSinceLastReview(false)
+        tourPosition = TourPosition(chapter: chapter, stop: 0)
+        revealCurrentTourStop()
+    }
+
+    func endTour() {
+        tourPosition = nil
+    }
+
+    /// Moves to the next or previous stop, crossing into the next or previous chapter.
+    func advanceTour(by offset: Int) {
+        guard let tour, let position = tourPosition else { return }
+        let flat = tour.chapters.indices.flatMap { chapter in tour.chapters[chapter].stops.indices.map { TourPosition(chapter: chapter, stop: $0) } }
+        guard let index = flat.firstIndex(of: position), flat.indices.contains(index + offset) else { return }
+        tourPosition = flat[index + offset]
+        revealCurrentTourStop()
+    }
+
+    /// Stop number (1-based) out of the whole tour, for "Stop 3 of 12".
+    var tourStopNumber: Int? {
+        guard let tour, let position = tourPosition else { return nil }
+        return tour.chapters.prefix(position.chapter).reduce(0) { $0 + $1.stops.count } + position.stop + 1
+    }
+
+    private func revealCurrentTourStop() {
+        guard let stop = currentTourStop else { return }
+        reveal(lineIndex: stop.lineIndex, on: stop.side, inFileAt: stop.filePath)
     }
 
     // MARK: - CI checks

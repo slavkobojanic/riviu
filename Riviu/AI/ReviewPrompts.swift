@@ -132,6 +132,24 @@ enum ReviewPrompts {
         return AIRequest(system: system, messages: [AIMessage(role: .user, text: question)])
     }
 
+    /// Asks for a reading order of the pull request's hunks, in chapters.
+    static func tourRequest(pullRequest: PullRequest, hunks: TourHunks) -> AIRequest {
+        let system = """
+        You plan a guided tour of a pull request for a code reviewer, so they read the changes in the order that makes \
+        them easiest to understand. Do not use tools.
+
+        \(TourReport.formatInstructions)
+        """
+        let question = """
+        Pull request \(pullRequest.reference.id): \(pullRequest.title)
+        Description: \(pullRequest.summary.isEmpty ? "(none)" : String(pullRequest.summary.prefix(2_000)))
+
+        Hunks:
+        \(hunks.listing.prefix(maxDiffCharacters))
+        """
+        return AIRequest(system: system, messages: [AIMessage(role: .user, text: question)])
+    }
+
     /// Proposes review rules from the findings someone keeps dismissing in a repository.
     static func ruleSuggestionRequest(repository: String, dismissals: [Dismissal], existingRules: [ReviewRule]) -> AIRequest {
         var system = """

@@ -37,6 +37,12 @@ struct ReviewCommands: Commands {
                 .keyboardShortcut(.downArrow, modifiers: [.command, .option])
             Button("Previous File") { workspace.selectAdjacentFile(offset: -1) }
                 .keyboardShortcut(.upArrow, modifiers: [.command, .option])
+            Button("Next Tour Stop") { workspace.advanceTour(by: 1) }
+                .keyboardShortcut(.rightArrow, modifiers: [.command, .option])
+                .disabled(workspace.tourPosition == nil)
+            Button("Previous Tour Stop") { workspace.advanceTour(by: -1) }
+                .keyboardShortcut(.leftArrow, modifiers: [.command, .option])
+                .disabled(workspace.tourPosition == nil)
             Button("Next Conversation") { workspace.revealAdjacentThread(offset: 1) }
                 .keyboardShortcut("]", modifiers: [.command, .option])
                 .disabled(workspace.unresolvedThreads.isEmpty)

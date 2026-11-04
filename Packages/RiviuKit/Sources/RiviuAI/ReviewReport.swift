@@ -159,12 +159,17 @@ public struct ReviewReport: Decodable, Sendable, Equatable {
 
     /// Reads the JSON object out of a reply, ignoring any text or code fence around it.
     public static func parse(_ reply: String) throws -> ReviewReport {
+        try decodeJSON(ReviewReport.self, in: reply)
+    }
+
+    /// Decodes the first-to-last brace of a reply, so prose or a code fence around the JSON is ignored.
+    public static func decodeJSON<Value: Decodable>(_ type: Value.Type, in reply: String) throws -> Value {
         guard let start = reply.firstIndex(of: "{"), let end = reply.lastIndex(of: "}"), start < end else {
             throw ParseError.noJSON
         }
         let json = Data(reply[start...end].utf8)
         do {
-            return try JSONDecoder().decode(ReviewReport.self, from: json)
+            return try JSONDecoder().decode(Value.self, from: json)
         } catch let DecodingError.dataCorrupted(context) {
             throw ParseError.invalid(context.debugDescription)
         } catch let DecodingError.keyNotFound(key, _) {

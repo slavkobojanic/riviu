@@ -25,6 +25,7 @@ struct PullRequestOverview: View {
                     ChecksSection(workspace: workspace)
                 }
                 AISummaryCard(pullRequest: pullRequest, aiReviews: aiReviews)
+                TourSection(pullRequest: pullRequest, workspace: workspace, aiReviews: aiReviews)
                 if let review = currentReview {
                     if let specCheck = review.specCheck {
                         SpecCheckSection(specCheck: specCheck)

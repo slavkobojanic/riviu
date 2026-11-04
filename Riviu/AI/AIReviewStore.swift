@@ -42,6 +42,9 @@ final class AIReviewStore {
     }
 
     private(set) var reviews: [PullRequestReference: AIReview] = [:]
+    /// Guided tours, made on request.
+    private(set) var tours: [PullRequestReference: ReviewTour] = [:]
+    private(set) var tourActivities: [PullRequestReference: Activity] = [:]
     /// Pull requests whose review is running, or failed last time.
     private(set) var activities: [PullRequestReference: Activity] = [:]
 
@@ -49,6 +52,7 @@ final class AIReviewStore {
     @ObservationIgnored private let account: GitHubAccount
     @ObservationIgnored private let rules: ReviewRuleStore
     @ObservationIgnored private let fileURL = URL.applicationSupportDirectory.appending(path: "Riviu/ai-reviews.json")
+    @ObservationIgnored private let toursURL = URL.applicationSupportDirectory.appending(path: "Riviu/ai-tours.json")
 
     init(settings: AppSettings, account: GitHubAccount, rules: ReviewRuleStore, demoReviews: [AIReview]) {
         self.settings = settings
@@ -161,6 +165,34 @@ final class AIReviewStore {
         }
     }
 
+    // MARK: - Guided tours
+
+    /// The tour for the pull request's current commit.
+    func tour(for pullRequest: PullRequest) -> ReviewTour? {
+        tours[pullRequest.reference].flatMap { $0.headSHA == pullRequest.headSHA ? $0 : nil }
+    }
+
+    func generateTour(for pullRequest: PullRequest) async {
+        let reference = pullRequest.reference
+        if case .reviewing = tourActivities[reference] { return }
+        tourActivities[reference] = .reviewing(author: AISetup.description(of: .review, settings: settings))
+        do {
+            let provider = try AISetup.makeProvider(for: .review, settings: settings)
+            let hunks = TourHunks(pullRequest: pullRequest)
+            let report = try TourReport.parse(try await provider.reply(to: ReviewPrompts.tourRequest(pullRequest: pullRequest, hunks: hunks)))
+            let tour = hunks.tour(from: report, pullRequest: pullRequest)
+            guard tour.stopCount > 0 else {
+                tourActivities[reference] = .failed("The AI didn't return a tour. Try again.")
+                return
+            }
+            tours[reference] = tour
+            tourActivities[reference] = nil
+            saveTours()
+        } catch {
+            tourActivities[reference] = .failed(error.localizedDescription)
+        }
+    }
+
     func dismissFinding(_ id: String, in reference: PullRequestReference) {
         reviews[reference]?.findings.removeAll { $0.id == id }
         save()
@@ -168,7 +200,17 @@ final class AIReviewStore {
 
     // MARK: - Saving
 
+    private func saveTours() {
+        let saved = tours.values.filter { !$0.pullRequest.isDemo }
+        try? JSONEncoder().encode(Array(saved)).write(to: toursURL, options: .atomic)
+    }
+
     private func load() {
+        if let data = try? Data(contentsOf: toursURL), let saved = try? JSONDecoder().decode([ReviewTour].self, from: data) {
+            for tour in saved {
+                tours[tour.pullRequest] = tour
+            }
+        }
         guard let data = try? Data(contentsOf: fileURL),
               let saved = try? JSONDecoder().decode([AIReview].self, from: data) else { return }
         for review in saved {

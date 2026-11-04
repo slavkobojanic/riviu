@@ -5,9 +5,9 @@ import RiviuDiff
 /// Launch arguments for jumping straight to a pull request while developing, like
 /// `Riviu -debugOpen demo#471 -debugFile services/webhook/handler.go -debugLine 40`.
 /// `-debugReviewer login` pretends to be someone else for "since your last review", and
-/// `-debugSinceReview YES` turns it on.
+/// `-debugSinceReview YES` turns it on. `-debugTour YES` plans a guided tour with the AI and starts it.
 enum DebugLaunch {
-    static func run(workspace: ReviewWorkspace, account: GitHubAccount) {
+    static func run(workspace: ReviewWorkspace, account: GitHubAccount, aiReviews: AIReviewStore) {
         let arguments = UserDefaults.standard
         guard let id = arguments.string(forKey: "debugOpen"), let hash = id.lastIndex(of: "#"),
               let number = Int(id[id.index(after: hash)...]) else { return }
@@ -17,6 +17,15 @@ enum DebugLaunch {
                 try? await Task.sleep(for: .milliseconds(100))
             }
             workspace.open(reference)
+            if arguments.bool(forKey: "debugTour") {
+                while workspace.pullRequest == nil {
+                    try? await Task.sleep(for: .milliseconds(100))
+                }
+                if let pullRequest = workspace.pullRequest, workspace.tour == nil {
+                    await aiReviews.generateTour(for: pullRequest)
+                }
+                workspace.startTour()
+            }
             if arguments.bool(forKey: "debugSinceReview") {
                 while workspace.sinceLastReview == nil {
                     try? await Task.sleep(for: .milliseconds(100))
