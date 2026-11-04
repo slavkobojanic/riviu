@@ -34,13 +34,13 @@ struct ChatComposer: View {
         if isReplying {
             Button("Stop", systemImage: "stop.fill", action: stop)
                 .labelStyle(.iconOnly)
-                .buttonStyle(.glass)
+                .buttonStyle(.bordered)
                 .buttonBorderShape(.circle)
                 .frame(width: buttonSize, height: buttonSize)
         } else {
             Button("Send", systemImage: "arrow.up", action: send)
                 .labelStyle(.iconOnly)
-                .buttonStyle(.glassProminent)
+                .buttonStyle(.borderedProminent)
                 .buttonBorderShape(.circle)
                 .frame(width: buttonSize, height: buttonSize)
                 .disabled(!canSend)

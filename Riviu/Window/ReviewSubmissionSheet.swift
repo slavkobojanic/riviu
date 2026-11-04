@@ -15,6 +15,7 @@ struct ReviewSubmissionSheet: View {
             Section("Summary") {
                 TextEditor(text: $summary)
                     .font(.body)
+                    .scrollContentBackground(.hidden)
                     .frame(minHeight: 100)
                 if !summary.isEmpty {
                     StructuredText(markdown: summary)
@@ -34,7 +35,7 @@ struct ReviewSubmissionSheet: View {
                 }
                 ForEach(workspace.pendingComments) { comment in
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("\(comment.filePath) · \(comment.lineLabel)")
+                        Text("\(comment.filePath)  \(comment.lineLabel)")
                             .font(.caption.weight(.semibold))
                         Text(comment.body)
                             .lineLimit(2)
@@ -43,7 +44,7 @@ struct ReviewSubmissionSheet: View {
             }
             if let errorMessage {
                 Text(errorMessage)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(.statusRed)
             }
         }
         .formStyle(.grouped)

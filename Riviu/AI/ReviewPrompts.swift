@@ -43,7 +43,7 @@ enum ReviewPrompts {
             instructions,
             "",
             "Pull request \(pullRequest.reference.id): \(pullRequest.title)",
-            "Author: \(pullRequest.author) · \(pullRequest.headBranch) → \(pullRequest.baseBranch)",
+            "Author: \(pullRequest.author), \(pullRequest.headBranch) → \(pullRequest.baseBranch)",
             "Description: \(pullRequest.summary.isEmpty ? "(none)" : pullRequest.summary)",
             "",
             "Changed files:",
@@ -76,7 +76,7 @@ enum ReviewPrompts {
         }
         var question = [
             "Review pull request \(pullRequest.reference.id): \(pullRequest.title)",
-            "Author: \(pullRequest.author) · \(pullRequest.headBranch) → \(pullRequest.baseBranch)",
+            "Author: \(pullRequest.author), \(pullRequest.headBranch) → \(pullRequest.baseBranch)",
             "Description: \(pullRequest.summary.isEmpty ? "(none)" : pullRequest.summary)",
         ]
         for issue in linkedIssues {

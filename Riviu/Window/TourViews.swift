@@ -13,10 +13,10 @@ struct TourSection: View {
                     .font(.title3.weight(.semibold))
                 Spacer()
                 if let tour = workspace.tour {
-                    Text("\(tour.chapters.count) chapters · \(tour.stopCount) stops")
+                    Text("\(tour.chapters.count) chapters  \(tour.stopCount) stops")
                         .font(.caption)
                     Button("Start Tour", systemImage: "play.fill") { workspace.startTour() }
-                        .buttonStyle(.glassProminent)
+                        .buttonStyle(.borderedProminent)
                 }
             }
             if let tour = workspace.tour {
@@ -46,7 +46,7 @@ struct TourSection: View {
         Button(title, systemImage: "map") {
             Task { await aiReviews.generateTour(for: pullRequest) }
         }
-        .buttonStyle(.glass)
+        .buttonStyle(.bordered)
     }
 }
 
@@ -62,7 +62,7 @@ private struct ChapterRow: View {
                 Text(chapter.isNotCovered ? "!" : "\(number)")
                     .font(.headline.monospacedDigit())
                     .frame(width: 22)
-                    .foregroundStyle(chapter.isNotCovered ? .orange : .primary)
+                    .foregroundStyle(chapter.isNotCovered ? .statusOrange : .primary)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(chapter.title)
                         .font(.headline)
@@ -96,14 +96,14 @@ struct TourBar: View {
         HStack(spacing: 14) {
             Image(systemName: chapter.isNotCovered ? "exclamationmark.triangle" : "map")
                 .font(.title3)
-                .foregroundStyle(chapter.isNotCovered ? .orange : .accentColor)
+                .foregroundStyle(chapter.isNotCovered ? .statusOrange : .accentColor)
             VStack(alignment: .leading, spacing: 3) {
-                Text("Chapter \(position.chapter + 1) of \(tour.chapters.count) · \(chapter.title)")
+                Text("Chapter \(position.chapter + 1) of \(tour.chapters.count)  \(chapter.title)")
                     .font(.headline)
                 Text(chapter.why)
                     .font(.callout)
                     .lineLimit(2)
-                Text("Stop \(workspace.tourStopNumber ?? 1) of \(tour.stopCount) · \((workspace.currentTourStop?.filePath as NSString?)?.lastPathComponent ?? "")")
+                Text("Stop \(workspace.tourStopNumber ?? 1) of \(tour.stopCount)  \((workspace.currentTourStop?.filePath as NSString?)?.lastPathComponent ?? "")")
                     .font(.caption)
             }
             Spacer(minLength: 8)
@@ -119,7 +119,7 @@ struct TourBar: View {
                         .help("End the tour")
                 }
                 .labelStyle(.iconOnly)
-                .buttonStyle(.glass)
+                .buttonStyle(.bordered)
                 .buttonBorderShape(.circle)
                 .controlSize(.large)
             }

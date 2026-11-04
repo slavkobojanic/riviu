@@ -84,9 +84,9 @@ private struct ChangedFilesHeader: View {
             Text("\(workspace.viewedFileCount) of \(pullRequest.files.count) viewed")
             Spacer()
             Text("+\(pullRequest.additions)")
-                .foregroundStyle(.green)
+                .foregroundStyle(.statusGreen)
             Text("−\(pullRequest.deletions)")
-                .foregroundStyle(.red)
+                .foregroundStyle(.statusRed)
         }
         .monospacedDigit()
         .padding(.trailing, 10)
@@ -144,7 +144,7 @@ private struct FileRow: View {
             if ciCount > 0 {
                 Label("\(ciCount)", systemImage: "xmark.octagon")
                     .font(.caption)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(.statusRed)
                     .help("\(ciCount) CI message(s)")
             }
             let threadCount = workspace.unresolvedThreadCount(forFileAt: file.path)
@@ -161,11 +161,11 @@ private struct FileRow: View {
             }
             if workspace.isChangedSinceViewed(file.path) {
                 Image(systemName: "arrow.triangle.2.circlepath")
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(.statusOrange)
                     .help("Changed since you viewed it")
             } else if workspace.isViewed(file.path) {
                 Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
+                    .foregroundStyle(.statusGreen)
                     .help("Viewed")
             } else {
                 Text(statusLetter)
@@ -206,9 +206,9 @@ private struct FileRow: View {
 
     private var statusColor: Color {
         switch file.status {
-        case .added: .green
-        case .deleted: .red
-        case .modified: .orange
+        case .added: .statusGreen
+        case .deleted: .statusRed
+        case .modified: .statusOrange
         case .renamed: .blue
         }
     }
@@ -223,9 +223,15 @@ private struct PullRequestHeader: View {
 
     var body: some View {
         Button { workspace.showOverview() } label: {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("\(pullRequest.reference.repository) #\(String(pullRequest.number)) · \(pullRequest.author)")
-                    .font(.caption.weight(.semibold))
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Text("\(pullRequest.reference.repository) #\(String(pullRequest.number))")
+                        .fontWeight(.semibold)
+                    Text(pullRequest.author)
+                        .foregroundStyle(.secondary)
+                }
+                .font(.caption)
+                .lineLimit(1)
                 Text(pullRequest.title)
                     .font(.headline)
                     .lineLimit(3)
@@ -233,17 +239,18 @@ private struct PullRequestHeader: View {
                 Label("\(pullRequest.headBranch) → \(pullRequest.baseBranch)", systemImage: "arrow.triangle.branch")
                     .font(.caption)
                     .lineLimit(1)
-                HStack(spacing: 6) {
+                HStack(spacing: 14) {
                     AIReviewStatusLabel(reference: pullRequest.reference, aiReviews: aiReviews, placeholder: "Overview & AI summary")
                     ChecksSummaryLabel(checkRuns: workspace.checkRuns)
                     Spacer(minLength: 4)
                     Image(systemName: "chevron.right")
                         .font(.caption.weight(.semibold))
                 }
-                .padding(.top, 4)
+                .padding(.top, 6)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(10)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 12)
             .background(background, in: .rect(cornerRadius: 10))
             .contentShape(.rect(cornerRadius: 10))
         }

@@ -53,8 +53,8 @@ struct MenuBarPanel: View {
         let checked = "Checked \(lastChecked.formatted(.relative(presentation: .named)))"
         switch watcher.requests.count {
         case 0: return checked
-        case 1: return "1 waiting · \(checked)"
-        case let count: return "\(count) waiting · \(checked)"
+        case 1: return "1 waiting  \(checked)"
+        case let count: return "\(count) waiting  \(checked)"
         }
     }
 
@@ -108,7 +108,7 @@ private struct RequestRow: View {
                     .font(.body.weight(.medium))
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
-                Text("\(summary.repository) #\(String(summary.number)) · \(summary.user.login)")
+                Text("\(summary.repository) #\(String(summary.number))  \(summary.user.login)")
                     .font(.caption)
                     .lineLimit(1)
                 AIReviewStatusLabel(reference: PullRequestReference(repository: summary.repository, number: summary.number),

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Where a pull request's AI review is at: "Summary queued", "Generating summary…", or "High risk · 3 findings".
+/// Where a pull request's AI review is at: "Summary queued", "Generating summary…", or "High risk  3 findings".
 struct AIReviewStatusLabel: View {
     let reference: PullRequestReference
     let aiReviews: AIReviewStore
@@ -20,7 +20,7 @@ struct AIReviewStatusLabel: View {
                 }
             case .failed:
                 Label("Summary failed", systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.red)
+                    .foregroundStyle(.statusRed)
             case nil:
                 if let review = aiReviews.review(for: reference) {
                     HStack(spacing: 6) {

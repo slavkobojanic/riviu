@@ -47,13 +47,13 @@ struct ChecksSummaryLabel: View {
                 EmptyView()
             } else if failing > 0 {
                 Label("\(failing) failing", systemImage: "xmark.circle.fill")
-                    .foregroundStyle(.red)
+                    .foregroundStyle(.statusRed)
             } else if running > 0 {
                 Label("\(running) running", systemImage: "clock")
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(.statusOrange)
             } else {
                 Label("Checks passed", systemImage: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
+                    .foregroundStyle(.statusGreen)
             }
         }
         .font(.caption)
@@ -95,7 +95,7 @@ private struct FailedCheckRow: View {
                 Spacer()
                 if run.hasLogs && explanation == nil {
                     Button(isExplaining ? "Reading the log…" : "Explain Failure", systemImage: "sparkles", action: explain)
-                        .buttonStyle(.glass)
+                        .buttonStyle(.bordered)
                         .controlSize(.small)
                         .disabled(isExplaining)
                         .help("Ask the AI what broke, from the end of the job's log and the diff")
@@ -112,7 +112,7 @@ private struct FailedCheckRow: View {
                     Button("Show \((path as NSString).lastPathComponent), line \(line + 1)", systemImage: "scope") {
                         workspace.reveal(lineIndex: line, on: .head, inFileAt: path)
                     }
-                    .buttonStyle(.glass)
+                    .buttonStyle(.bordered)
                     .controlSize(.small)
                 }
             }
@@ -146,9 +146,9 @@ private struct CheckStatusIcon: View {
             ProgressView()
                 .controlSize(.mini)
         } else if run.isFailure {
-            Image(systemName: "xmark.circle.fill").foregroundStyle(.red)
+            Image(systemName: "xmark.circle.fill").foregroundStyle(.statusRed)
         } else if run.conclusion == "success" {
-            Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+            Image(systemName: "checkmark.circle.fill").foregroundStyle(.statusGreen)
         } else {
             Image(systemName: "minus.circle.fill").foregroundStyle(.secondary)
         }

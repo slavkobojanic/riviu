@@ -115,7 +115,7 @@ final class ReviewRequestWatcher {
         }
         guard settings.notifiesAboutReviewRequests, let review = aiReviews.review(for: reference) else { return }
         let findings = review.findings.count == 1 ? "1 finding" : "\(review.findings.count) findings"
-        notifications.post(title: "Review requested · \(review.risk.rawValue) risk",
+        notifications.post(title: "Review requested, \(review.risk.rawValue) risk",
                            body: "\(notificationText(for: summary))\nAI summary ready, \(findings).",
                            about: reference, playsSound: false)
     }

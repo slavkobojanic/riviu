@@ -46,7 +46,7 @@ struct FindingCard: View {
                 .fixedSize()
                 .help("Dismiss, or use the arrow to give a reason or stop similar findings in this repository")
             }
-            .buttonStyle(.glass)
+            .buttonStyle(.bordered)
             .controlSize(.small)
             if let ruleDraft {
                 RuleEditor(text: ruleDraft,
@@ -75,9 +75,9 @@ private struct RuleEditor: View {
                     .textFieldStyle(.roundedBorder)
                     .onSubmit { onSave(text) }
                 Button("Cancel", action: onCancel)
-                    .buttonStyle(.glass)
+                    .buttonStyle(.bordered)
                 Button("Save Rule") { onSave(text) }
-                    .buttonStyle(.glassProminent)
+                    .buttonStyle(.borderedProminent)
                     .disabled(text.trimmingCharacters(in: .whitespaces).isEmpty)
             }
             .controlSize(.small)
@@ -118,8 +118,8 @@ struct SeverityBadge: View {
 
     private var color: Color {
         switch severity {
-        case .high: .red
-        case .medium: .orange
+        case .high: .statusRed
+        case .medium: .statusOrange
         case .low: .blue
         }
     }

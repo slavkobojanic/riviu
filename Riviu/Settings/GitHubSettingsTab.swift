@@ -84,7 +84,7 @@ private struct ReviewRequestsSection: View {
                 .controlSize(.small)
         } else if let errorMessage = watcher.errorMessage {
             Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                .foregroundStyle(.red)
+                .foregroundStyle(.statusRed)
                 .lineLimit(2)
         } else if let lastChecked = watcher.lastChecked {
             Text("Last checked \(lastChecked, format: .relative(presentation: .named))")

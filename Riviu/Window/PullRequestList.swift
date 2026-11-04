@@ -136,7 +136,6 @@ private struct PullRequestRow: View {
             }
             HStack(spacing: 6) {
                 Text("\(summary.repository) #\(String(summary.number))")
-                Text("·")
                 Text(summary.user.login)
                 Spacer(minLength: 4)
                 if summary.comments > 0 {
@@ -168,11 +167,11 @@ private struct PullRequestRow: View {
         let (symbol, color): (String, Color) = if summary.isMerged {
             ("arrow.triangle.merge", .purple)
         } else if summary.state == "closed" {
-            ("xmark.circle", .red)
+            ("xmark.circle", .statusRed)
         } else if summary.isDraft {
             ("circle.dashed", .gray)
         } else {
-            ("arrow.triangle.pull", .green)
+            ("arrow.triangle.pull", .statusGreen)
         }
         return Image(systemName: symbol)
             .foregroundStyle(color)

@@ -38,7 +38,7 @@ extension DiffCanvasView {
             context.setFillColor(palette.collapsedRow)
             context.fill(rect)
             let textY = rect.minY + (rect.height - lineHeight) / 2
-            let text = change.map { "⋯   \(hiddenLineCount) \(hiddenLineCount == 1 ? "line" : "lines") · \($0.title), hidden" }
+            let text = change.map { "⋯   \($0.title), \(hiddenLineCount) \(hiddenLineCount == 1 ? "line" : "lines") hidden" }
                 ?? "⋯   \(hiddenLineCount) unchanged lines"
             draw(label(text), x: gutterWidth + 10, y: textY, in: context)
 

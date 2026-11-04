@@ -76,7 +76,7 @@ struct CommentComposer: View {
                 }
                 .help("Insert a GitHub suggestion with the selected code")
             }
-            .buttonStyle(.glass)
+            .buttonStyle(.bordered)
             .controlSize(.small)
         }
     }
@@ -104,14 +104,14 @@ struct CommentComposer: View {
 
     private var footer: some View {
         HStack {
-            Text("Markdown supported · ⌘↩ to add")
+            Text("Markdown supported  ⌘↩ to add")
                 .font(.caption)
             Spacer()
             Button("Cancel") { workspace.cancelEditing(comment.id) }
-                .buttonStyle(.glass)
+                .buttonStyle(.bordered)
                 .keyboardShortcut(.cancelAction)
             Button(comment.isNew ? "Add Comment" : "Save") { workspace.saveComment(comment.id, body: draft) }
-                .buttonStyle(.glassProminent)
+                .buttonStyle(.borderedProminent)
                 .keyboardShortcut(.return, modifiers: .command)
                 .disabled(isDraftEmpty)
         }
@@ -200,9 +200,9 @@ private struct PolishedComment: View {
             HStack {
                 Spacer()
                 Button("Keep Mine", action: onDiscard)
-                    .buttonStyle(.glass)
+                    .buttonStyle(.bordered)
                 Button("Use Polished", action: onUse)
-                    .buttonStyle(.glassProminent)
+                    .buttonStyle(.borderedProminent)
             }
             .controlSize(.small)
         }

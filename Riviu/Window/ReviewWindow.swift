@@ -11,6 +11,7 @@ struct ReviewWindow: View {
     let watcher: ReviewRequestWatcher
     @Bindable var settings: AppSettings
     @State private var showsReviewSheet = false
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         NavigationSplitView {
@@ -60,7 +61,7 @@ struct ReviewWindow: View {
     private var subtitle: String {
         guard let pullRequest = workspace.pullRequest else { return "" }
         guard let file = workspace.selectedFile, !workspace.showsOverview else { return pullRequest.reference.id }
-        let location = file.directory.isEmpty ? "" : file.directory + " · "
+        let location = file.directory.isEmpty ? "" : file.directory + "  "
         return "\(location)+\(file.additions) −\(file.deletions)"
     }
 
@@ -98,10 +99,9 @@ struct ReviewWindow: View {
         ToolbarSpacer(.fixed)
         ToolbarItemGroup {
             if let url = workspace.pullRequest?.webURL {
-                Link(destination: url) {
-                    Label("Open on GitHub", systemImage: "safari")
-                }
-                .help("Open this pull request on GitHub")
+                // A Button rather than a Link, so it's drawn like the other toolbar buttons.
+                Button("Open on GitHub", systemImage: "safari") { openURL(url) }
+                    .help("Open this pull request on GitHub")
             }
             Button("Submit Review", systemImage: "paperplane") { showsReviewSheet = true }
                 .disabled(!workspace.canSubmitReview)

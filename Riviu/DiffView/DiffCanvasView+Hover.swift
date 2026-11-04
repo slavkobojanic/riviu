@@ -137,8 +137,12 @@ extension DiffCanvasView {
             return
         }
         let size = gutterActionsSize
+        let room = GutterActions.tooltipRoom
         let x = max(columnX(column) + 2, columnX(column) + gutterWidth - size.width - 4)
-        gutterActions.frame = CGRect(x: x, y: rowTops[anchorRow] + (lineHeight - size.height) / 2, width: size.width, height: size.height)
+        let buttonsY = rowTops[anchorRow] + (lineHeight - size.height) / 2
+        // The view is taller and wider than the buttons so a tooltip fits above them.
+        gutterActions.buttonsSize = size
+        gutterActions.frame = CGRect(x: x, y: buttonsY - room.height, width: size.width + room.width, height: size.height + room.height)
         gutterActions.isHidden = false
     }
 

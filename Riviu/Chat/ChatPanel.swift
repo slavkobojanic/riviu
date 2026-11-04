@@ -32,7 +32,7 @@ struct ChatPanel: View {
                     .font(.headline)
                     .lineLimit(1)
                 if let pullRequest = workspace.pullRequest {
-                    Text("\(pullRequest.reference.id) · \(pullRequest.title)")
+                    Text("\(pullRequest.reference.id)  \(pullRequest.title)")
                         .font(.caption)
                         .lineLimit(1)
                 }
@@ -95,7 +95,7 @@ private struct ChatConversation: View {
                 .font(.headline)
             ForEach(suggestedQuestions, id: \.self) { question in
                 Button(question) { send(question) }
-                    .buttonStyle(.glass)
+                    .buttonStyle(.bordered)
                     .controlSize(.small)
             }
         }

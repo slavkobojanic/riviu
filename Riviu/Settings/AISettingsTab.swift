@@ -97,6 +97,7 @@ private struct InstructionsEditor: View {
         DisclosureGroup("Instructions", isExpanded: $isExpanded) {
             TextEditor(text: instructions)
                 .font(.system(.callout, design: .monospaced))
+                .scrollContentBackground(.hidden)
                 .frame(minHeight: 110)
             HStack {
                 Text(footnote)
@@ -134,13 +135,13 @@ private struct CommandLineToolRow: View {
             LabeledContent(tool.displayName) {
                 if let executable = AISetup.executable(for: tool, settings: settings) {
                     Label(executable.path, systemImage: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
+                        .foregroundStyle(.statusGreen)
                         .textSelection(.enabled)
                         .lineLimit(1)
                         .truncationMode(.middle)
                 } else {
                     Label("Not found", systemImage: "xmark.circle.fill")
-                        .foregroundStyle(.red)
+                        .foregroundStyle(.statusRed)
                 }
             }
             if AISetup.executable(for: tool, settings: settings) == nil {
@@ -180,7 +181,7 @@ private struct AnthropicAPISection: View {
                 .onChange(of: apiKey) { saveKey() }
             if let saveError {
                 Text(saveError)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(.statusRed)
             }
         } header: {
             Text("Claude API")
@@ -224,11 +225,11 @@ private struct ConnectionTestRow: View {
             switch result {
             case let .success(reply):
                 Label("Connected: “\(reply)”", systemImage: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
+                    .foregroundStyle(.statusGreen)
                     .lineLimit(2)
             case let .failure(message):
                 Label(message, systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.red)
+                    .foregroundStyle(.statusRed)
                     .lineLimit(4)
             case nil:
                 EmptyView()

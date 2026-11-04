@@ -10,7 +10,7 @@ nonisolated struct AIReview: Codable, Sendable {
     /// The commit that was reviewed. Newer commits make the review outdated.
     let headSHA: String
     let createdAt: Date
-    /// Which provider and model wrote it, like "Claude Code · opus".
+    /// Which provider and model wrote it, like "Claude Code  opus".
     let author: String
     let summary: String
     let risk: ReviewFinding.Severity

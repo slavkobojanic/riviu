@@ -41,8 +41,8 @@ struct AnnotationCard: View {
 
     private var color: Color {
         switch annotation.annotationLevel {
-        case "failure": .red
-        case "warning": .orange
+        case "failure": .statusRed
+        case "warning": .statusOrange
         default: .blue
         }
     }

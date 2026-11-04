@@ -29,7 +29,7 @@ struct ThreadCard: View {
                 if let errorMessage {
                     Text(errorMessage)
                         .font(.caption)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(.statusRed)
                 }
             }
         }
@@ -56,17 +56,17 @@ struct ThreadCard: View {
             if thread.isResolved {
                 Label("Resolved", systemImage: "checkmark.circle.fill")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(.green)
+                    .foregroundStyle(.statusGreen)
             } else if thread.isOutdated {
                 Text("Outdated")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(.statusOrange)
             }
             Spacer()
             Button(thread.isResolved ? "Unresolve" : "Resolve", systemImage: thread.isResolved ? "arrow.uturn.backward" : "checkmark") {
                 run { try await workspace.setResolved(!thread.isResolved, thread: thread) }
             }
-            .buttonStyle(.glass)
+            .buttonStyle(.bordered)
             .controlSize(.small)
             .disabled(isWorking)
         }
@@ -75,7 +75,7 @@ struct ThreadCard: View {
     private var title: String {
         let starter = thread.allComments.first?.author?.login ?? "Someone"
         let replies = thread.allComments.count - 1
-        return replies > 0 ? "\(starter) · \(replies) \(replies == 1 ? "reply" : "replies")" : starter
+        return replies > 0 ? "\(starter)  \(replies) \(replies == 1 ? "reply" : "replies")" : starter
     }
 
     private var replyField: some View {
@@ -87,7 +87,7 @@ struct ThreadCard: View {
                 .background(.background.opacity(0.55), in: .rect(cornerRadius: 10))
                 .onSubmit(sendReply)
             Button("Reply", action: sendReply)
-                .buttonStyle(.glassProminent)
+                .buttonStyle(.borderedProminent)
                 .disabled(reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isWorking)
         }
     }

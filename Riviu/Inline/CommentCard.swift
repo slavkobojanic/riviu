@@ -13,7 +13,7 @@ struct CommentCard: View {
                     .font(.title3)
                 Text("You")
                     .font(.headline)
-                Text("Pending · \(comment.lineLabel)")
+                Text("Pending  \(comment.lineLabel)")
                     .font(.subheadline)
                 Spacer()
                 editButtons
@@ -33,7 +33,7 @@ struct CommentCard: View {
                 Button("Delete", systemImage: "trash") { workspace.deleteComment(comment.id) }
             }
             .labelStyle(.iconOnly)
-            .buttonStyle(.glass)
+            .buttonStyle(.bordered)
             .buttonBorderShape(.circle)
             .controlSize(.small)
         }

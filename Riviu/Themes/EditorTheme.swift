@@ -16,11 +16,11 @@ enum EditorThemeFamily: String, CaseIterable, Identifiable {
     /// The names of the light and dark variants, for the theme picker.
     var variantNames: String {
         switch self {
-        case .one: "One Light · One Dark"
-        case .github: "GitHub Light · GitHub Dark"
-        case .xcode: "Xcode Light · Xcode Dark"
-        case .solarized: "Solarized Light · Solarized Dark"
-        case .catppuccin: "Catppuccin Latte · Mocha"
+        case .one: "One Light / One Dark"
+        case .github: "GitHub Light / GitHub Dark"
+        case .xcode: "Xcode Light / Xcode Dark"
+        case .solarized: "Solarized Light / Solarized Dark"
+        case .catppuccin: "Catppuccin Latte / Mocha"
         }
     }
 

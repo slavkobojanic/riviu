@@ -29,7 +29,7 @@ struct GitHubSignInOptions: View {
             if let error = account.errorMessage {
                 Text(error)
                     .font(.caption)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(.statusRed)
             }
         }
         .buttonStyle(.link)
@@ -79,7 +79,7 @@ private struct AccessTokenSheet: View {
             SecureField("Token", text: $token, prompt: Text("ghp_…"))
             if let error = account.errorMessage {
                 Text(error)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(.statusRed)
             }
         }
         .formStyle(.grouped)
@@ -122,10 +122,10 @@ private struct DeviceCodeSheet: View {
                 NSPasteboard.general.setString(code.userCode, forType: .string)
                 NSWorkspace.shared.open(code.verificationUri)
             }
-            .buttonStyle(.glassProminent)
+            .buttonStyle(.borderedProminent)
             if let errorMessage {
                 Text(errorMessage)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(.statusRed)
             } else {
                 ProgressView("Waiting for GitHub…")
                     .controlSize(.small)

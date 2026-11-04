@@ -103,7 +103,8 @@ final class DiffCanvasView: NSView, NSPopoverDelegate {
     /// Remembered x position while moving the caret up and down, so it doesn't drift on short lines.
     var caretGoalX: CGFloat?
     var isDraggingSelection = false
-    let gutterActions = NSHostingView(rootView: GutterActions(onExplain: {}, onHotPath: {}, onComment: {}))
+    let gutterActions = GutterActionsHostingView(rootView: GutterActions(onExplain: {}, onHotPath: {}, onComment: {}))
+    /// The buttons alone, measured once.
     lazy var gutterActionsSize = gutterActions.fittingSize
     let popover = NSPopover()
 

@@ -50,7 +50,7 @@ struct HotPathPopover: View {
                     }
                 }
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(focus.map { "\($0.name)() · \((target.filePath as NSString).lastPathComponent)" } ?? (target.filePath as NSString).lastPathComponent)
+                    Text(focus.map { "\($0.name)()  \((target.filePath as NSString).lastPathComponent)" } ?? (target.filePath as NSString).lastPathComponent)
                         .font(.headline)
                     Text(target.label)
                         .font(.caption)
@@ -92,7 +92,7 @@ struct HotPathPopover: View {
                     isExplaining = false
                 }
             }
-            .buttonStyle(.glass)
+            .buttonStyle(.bordered)
             .disabled(isExplaining || (callers.isEmpty && callees.isEmpty))
         }
     }
@@ -211,7 +211,7 @@ private struct IndexStatus<Content: View>: View {
         case let .failed(message):
             Label(message, systemImage: "exclamationmark.triangle")
                 .font(.callout)
-                .foregroundStyle(.orange)
+                .foregroundStyle(.statusOrange)
         case nil:
             ProgressView()
                 .controlSize(.small)

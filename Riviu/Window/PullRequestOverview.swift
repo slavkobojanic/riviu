@@ -16,7 +16,7 @@ struct PullRequestOverview: View {
                 if let message = workspace.syncErrorMessage {
                     Label(message, systemImage: "exclamationmark.triangle")
                         .font(.callout)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(.statusOrange)
                 }
                 if let sinceLastReview = workspace.sinceLastReview {
                     SinceLastReviewBanner(workspace: workspace, sinceLastReview: sinceLastReview)
@@ -75,8 +75,8 @@ private struct OverviewHeader: View {
                     .lineLimit(1)
                 Label("\(pullRequest.files.count) files", systemImage: "doc.on.doc")
                 HStack(spacing: 6) {
-                    Text("+\(pullRequest.additions)").foregroundStyle(.green)
-                    Text("−\(pullRequest.deletions)").foregroundStyle(.red)
+                    Text("+\(pullRequest.additions)").foregroundStyle(.statusGreen)
+                    Text("−\(pullRequest.deletions)").foregroundStyle(.statusRed)
                 }
                 .monospacedDigit()
             }
@@ -139,7 +139,7 @@ private struct AISummaryCard: View {
 
     private func footer(for review: AIReview) -> some View {
         HStack(spacing: 12) {
-            Text("\(review.author) · \(review.createdAt, format: .relative(presentation: .named))")
+            Text("\(review.author)  \(review.createdAt, format: .relative(presentation: .named))")
                 .font(.caption)
             if let files = review.guidelineFiles, !files.isEmpty {
                 Label("Followed \(files.formatted(.list(type: .and)))", systemImage: "doc.text.magnifyingglass")
@@ -149,11 +149,11 @@ private struct AISummaryCard: View {
             if review.headSHA != pullRequest.headSHA {
                 Label("New commits since this review", systemImage: "arrow.triangle.2.circlepath")
                     .font(.caption)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(.statusOrange)
             }
             Spacer()
             Button("Review Again") { aiReviews.start(for: pullRequest) }
-                .buttonStyle(.glass)
+                .buttonStyle(.bordered)
                 .controlSize(.small)
                 .help("Run a new review with \(AISetup.description(of: .review, settings: settings))")
         }
@@ -162,7 +162,7 @@ private struct AISummaryCard: View {
     private func runButton(title: String) -> some View {
         HStack(spacing: 10) {
             Button(title, systemImage: "sparkles") { aiReviews.start(for: pullRequest) }
-                .buttonStyle(.glassProminent)
+                .buttonStyle(.borderedProminent)
             Text("Uses \(AISetup.description(of: .review, settings: settings))")
                 .font(.caption)
         }
@@ -194,11 +194,11 @@ private struct AddressedFindingsSection: View {
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(findings) { finding in
                     Label {
-                        Text("\(finding.title) · \((finding.filePath as NSString).lastPathComponent)")
+                        Text("\(finding.title)  \((finding.filePath as NSString).lastPathComponent)")
                             .strikethrough()
                     } icon: {
                         Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
+                            .foregroundStyle(.statusGreen)
                     }
                 }
             }
@@ -223,7 +223,7 @@ private struct FindingRow: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(finding.title)
                         .font(.headline)
-                    Text("\((finding.filePath as NSString).lastPathComponent) · \(describeLines(finding.lines, on: finding.side))")
+                    Text("\((finding.filePath as NSString).lastPathComponent)  \(describeLines(finding.lines, on: finding.side))")
                         .font(.caption.monospaced())
                     InlineText(markdown: finding.body)
                         .font(.callout)
@@ -260,14 +260,14 @@ private struct SinceLastReviewBanner: View {
                     Label("The branch was rebased or force-pushed, so these changes may include work from \(workspace.pullRequest?.baseBranch ?? "the base branch").",
                           systemImage: "exclamationmark.triangle")
                         .font(.callout)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(.statusOrange)
                 }
             }
             Spacer()
             Button(workspace.showsChangesSinceLastReview ? "Show All Changes" : "Review These Changes") {
                 workspace.setShowsChangesSinceLastReview(!workspace.showsChangesSinceLastReview)
             }
-            .buttonStyle(.glassProminent)
+            .buttonStyle(.borderedProminent)
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -326,9 +326,9 @@ private struct SpecCheckSection: View {
 
     private func color(for status: ReviewReport.SpecCheck.Status) -> Color {
         switch status {
-        case .addressed: .green
-        case .partial: .orange
-        case .missing: .red
+        case .addressed: .statusGreen
+        case .partial: .statusOrange
+        case .missing: .statusRed
         }
     }
 }
@@ -347,12 +347,12 @@ private struct QuestionsSection: View {
                     Image(systemName: "questionmark.bubble")
                     VStack(alignment: .leading, spacing: 2) {
                         InlineText(markdown: question.question)
-                        Text("\((question.filePath as NSString).lastPathComponent) · line \(question.lineIndex + 1)")
+                        Text("\((question.filePath as NSString).lastPathComponent)  line \(question.lineIndex + 1)")
                             .font(.caption.monospaced())
                     }
                     Spacer(minLength: 8)
                     Button("Ask") { workspace.ask(question) }
-                        .buttonStyle(.glass)
+                        .buttonStyle(.bordered)
                         .controlSize(.small)
                         .help("Open a comment with this question on its line")
                 }
@@ -401,7 +401,7 @@ private struct ConversationRow: View {
                 if thread.lineIndex == nil {
                     Text("Outdated")
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(.statusOrange)
                 } else {
                     Image(systemName: "chevron.right")
                         .font(.caption.weight(.semibold))

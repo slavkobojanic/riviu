@@ -36,7 +36,7 @@ struct ExplainPopover: View {
             VStack(alignment: .leading, spacing: 2) {
                 Label("Explain", systemImage: "sparkles")
                     .font(.headline)
-                Text("\((target.filePath as NSString).lastPathComponent) · \(target.label)")
+                Text("\((target.filePath as NSString).lastPathComponent)  \(target.label)")
                     .font(.caption)
             }
             Spacer()
@@ -89,9 +89,9 @@ struct ExplainPopover: View {
             }
             .disabled(answer.isEmpty)
             Button("Continue in Chat", systemImage: "bubble.left.and.text.bubble.right", action: onContinueInChat)
-                .buttonStyle(.glassProminent)
+                .buttonStyle(.borderedProminent)
         }
-        .buttonStyle(.glass)
+        .buttonStyle(.bordered)
         .controlSize(.small)
     }
 
@@ -154,7 +154,7 @@ struct AIErrorView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Label(message, systemImage: "exclamationmark.triangle")
-                .foregroundStyle(.red)
+                .foregroundStyle(.statusRed)
             SettingsLink {
                 Text("Open AI Settings…")
             }

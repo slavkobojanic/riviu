@@ -25,14 +25,14 @@ enum AISetup {
         return AnthropicAPIProvider(apiKey: apiKey, model: model.isEmpty ? AnthropicAPIProvider.defaultModel : model)
     }
 
-    /// "Claude Code · sonnet", for showing which model is answering.
+    /// "Claude Code  sonnet", for showing which model is answering.
     static func description(of task: AITask, settings: AppSettings) -> String {
         let model = settings.model(for: task).trimmingCharacters(in: .whitespaces)
         let provider = settings.provider(for: task)
         if model.isEmpty {
-            return provider == .anthropicAPI ? "Claude API · \(AnthropicAPIProvider.defaultModel)" : provider.title
+            return provider == .anthropicAPI ? "Claude API (\(AnthropicAPIProvider.defaultModel))" : provider.title
         }
-        return "\(provider == .anthropicAPI ? "Claude API" : provider.title) · \(model)"
+        return "\(provider == .anthropicAPI ? "Claude API" : provider.title) (\(model))"
     }
 
     /// The user's custom path if they set one, otherwise wherever the tool is on the PATH.
