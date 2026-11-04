@@ -108,7 +108,7 @@ private struct RequestRow: View {
                     .font(.body.weight(.medium))
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
-                Text("\(summary.repository) #\(summary.number) · \(summary.user.login)")
+                Text("\(summary.repository) #\(String(summary.number)) · \(summary.user.login)")
                     .font(.caption)
                     .lineLimit(1)
                 AIReviewStatusLabel(reference: PullRequestReference(repository: summary.repository, number: summary.number),

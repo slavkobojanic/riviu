@@ -20,7 +20,7 @@ public enum GitHubError: LocalizedError, Equatable {
 
 /// A small client for the parts of the GitHub REST API that Riviu uses.
 public struct GitHubClient: Sendable {
-    private static let apiURL = URL(string: "https://api.github.com")!
+    static let apiURL = URL(string: "https://api.github.com")!
 
     public let token: String
 
@@ -105,7 +105,7 @@ public struct GitHubClient: Sendable {
         return try Self.decoder.decode(Response.self, from: data)
     }
 
-    private func makeRequest(url: URL) -> URLRequest {
+    func makeRequest(url: URL) -> URLRequest {
         var request = URLRequest(url: url)
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
@@ -113,7 +113,7 @@ public struct GitHubClient: Sendable {
         return request
     }
 
-    private func send(_ request: URLRequest) async throws -> Data {
+    func send(_ request: URLRequest) async throws -> Data {
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else { return data }
         switch http.statusCode {

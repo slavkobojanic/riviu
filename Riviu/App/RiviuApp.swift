@@ -36,7 +36,7 @@ struct RiviuApp: App {
         }
         watcher.start()
         #if DEBUG
-        DebugLaunch.run(workspace: workspace)
+        DebugLaunch.run(workspace: workspace, account: account)
         #endif
     }
 

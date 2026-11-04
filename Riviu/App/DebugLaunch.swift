@@ -1,20 +1,26 @@
 #if DEBUG
 import Foundation
+import RiviuDiff
 
 /// Launch arguments for jumping straight to a pull request while developing, like
-/// `Riviu -debugOpen demo#471 -debugFile services/webhook/handler.go`.
+/// `Riviu -debugOpen demo#471 -debugFile services/webhook/handler.go -debugLine 40`.
 enum DebugLaunch {
-    static func run(workspace: ReviewWorkspace) {
+    static func run(workspace: ReviewWorkspace, account: GitHubAccount) {
         let arguments = UserDefaults.standard
         guard let id = arguments.string(forKey: "debugOpen"), let hash = id.lastIndex(of: "#"),
               let number = Int(id[id.index(after: hash)...]) else { return }
-        workspace.open(PullRequestReference(repository: String(id[..<hash]), number: number))
-        guard let path = arguments.string(forKey: "debugFile") else { return }
+        let reference = PullRequestReference(repository: String(id[..<hash]), number: number)
         Task {
+            while !reference.isDemo && !account.isSignedIn {
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+            workspace.open(reference)
+            guard let path = arguments.string(forKey: "debugFile") else { return }
             while workspace.pullRequest == nil {
                 try? await Task.sleep(for: .milliseconds(100))
             }
-            workspace.selectFile(at: path)
+            let line = arguments.integer(forKey: "debugLine")
+            workspace.reveal(lineIndex: max(0, line - 1), on: .head, inFileAt: path)
         }
     }
 }

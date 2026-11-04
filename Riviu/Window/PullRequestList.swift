@@ -118,7 +118,7 @@ struct PullRequestList: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(pullRequest.title)
                                 .lineLimit(2)
-                            Text("#\(pullRequest.number) · \(pullRequest.author)")
+                            Text("#\(String(pullRequest.number)) · \(pullRequest.author)")
                                 .font(.caption)
                             AIReviewStatusLabel(reference: pullRequest.reference, aiReviews: aiReviews)
                         }
@@ -146,7 +146,7 @@ private struct PullRequestRow: View {
                     .lineLimit(2)
             }
             HStack(spacing: 6) {
-                Text("\(summary.repository) #\(summary.number)")
+                Text("\(summary.repository) #\(String(summary.number))")
                 Text("·")
                 Text(summary.user.login)
                 Spacer(minLength: 4)

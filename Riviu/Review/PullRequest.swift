@@ -109,11 +109,9 @@ nonisolated struct ReviewComment: Identifiable, Sendable {
     var isEditing: Bool
     /// True until the comment is added for the first time; cancelling a new comment deletes it.
     var isNew: Bool
-    /// True once it has been posted to GitHub as part of a review.
-    var isSubmitted = false
 
     var lineLabel: String { describeLines(lines, on: side) }
-    var isPending: Bool { !isNew && !isEditing && !isSubmitted }
+    var isPending: Bool { !isNew && !isEditing }
 }
 
 /// A span of code picked in the diff, by selecting it or hovering its gutter.

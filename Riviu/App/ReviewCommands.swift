@@ -23,6 +23,13 @@ struct ReviewCommands: Commands {
             Button("Refresh Pull Requests") { watcher.refreshAll() }
                 .keyboardShortcut("r")
             Divider()
+            Button("Back") { workspace.goBack() }
+                .keyboardShortcut("[")
+                .disabled(!workspace.canGoBack)
+            Button("Forward") { workspace.goForward() }
+                .keyboardShortcut("]")
+                .disabled(!workspace.canGoForward)
+            Divider()
             Button(workspace.isSelectedFileViewed ? "Mark as Not Viewed" : "Mark as Viewed") { workspace.toggleViewedForSelectedFile() }
                 .keyboardShortcut("v", modifiers: [.command, .shift])
             Divider()
@@ -30,6 +37,12 @@ struct ReviewCommands: Commands {
                 .keyboardShortcut(.downArrow, modifiers: [.command, .option])
             Button("Previous File") { workspace.selectAdjacentFile(offset: -1) }
                 .keyboardShortcut(.upArrow, modifiers: [.command, .option])
+            Button("Next Conversation") { workspace.revealAdjacentThread(offset: 1) }
+                .keyboardShortcut("]", modifiers: [.command, .option])
+                .disabled(workspace.unresolvedThreads.isEmpty)
+            Button("Previous Conversation") { workspace.revealAdjacentThread(offset: -1) }
+                .keyboardShortcut("[", modifiers: [.command, .option])
+                .disabled(workspace.unresolvedThreads.isEmpty)
             Divider()
             Button(settings.diffLayout == .split ? "Show Unified Diff" : "Show Split Diff") {
                 settings.diffLayout = settings.diffLayout == .split ? .unified : .split

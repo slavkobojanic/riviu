@@ -118,13 +118,23 @@ private struct FileRow: View {
                     .font(.caption)
                     .help("\(commentCount) pending comment(s)")
             }
+            let threadCount = workspace.unresolvedThreadCount(forFileAt: file.path)
+            if threadCount > 0 {
+                Label("\(threadCount)", systemImage: "bubble.left.and.bubble.right")
+                    .font(.caption)
+                    .help("\(threadCount) unresolved conversation(s)")
+            }
             if !workspace.findings(inFileAt: file.path).isEmpty {
                 Image(systemName: "sparkles")
                     .font(.caption)
                     .foregroundStyle(.purple)
                     .help("AI findings")
             }
-            if workspace.isViewed(file.path) {
+            if workspace.isChangedSinceViewed(file.path) {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .foregroundStyle(.orange)
+                    .help("Changed since you viewed it")
+            } else if workspace.isViewed(file.path) {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(.green)
                     .help("Viewed")
@@ -185,7 +195,7 @@ private struct PullRequestHeader: View {
     var body: some View {
         Button { workspace.showOverview() } label: {
             VStack(alignment: .leading, spacing: 4) {
-                Text("\(pullRequest.reference.isDemo ? "Demo" : pullRequest.reference.repository) #\(pullRequest.number) · \(pullRequest.author)")
+                Text("\(pullRequest.reference.isDemo ? "Demo" : pullRequest.reference.repository) #\(String(pullRequest.number)) · \(pullRequest.author)")
                     .font(.caption.weight(.semibold))
                 Text(pullRequest.title)
                     .font(.headline)

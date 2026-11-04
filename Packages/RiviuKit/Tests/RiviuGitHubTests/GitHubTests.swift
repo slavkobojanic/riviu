@@ -49,3 +49,22 @@ struct GitHubDecodingTests {
         #expect(json.contains(#""commit_id":"abc""#))
     }
 }
+
+struct GraphQLDecodingTests {
+    @Test func decodesReviewThreads() throws {
+        let json = """
+        {"data": {"id": "T1", "isResolved": false, "isOutdated": true, "path": "a.swift", "line": null, "diffSide": "RIGHT",
+                  "comments": {"nodes": [{"id": "C1", "author": {"login": "octocat"}, "body": "Why?", "createdAt": "2026-11-01T10:00:00Z"}]}}}
+        """
+        let reply = try GitHubClient.decoder.decode(GraphQLReply<GitHubReviewThread>.self, from: Data(json.utf8))
+        let thread = try #require(reply.data)
+        #expect(thread.line == nil)
+        #expect(thread.allComments.first?.author?.login == "octocat")
+    }
+
+    @Test func surfacesGraphQLErrors() throws {
+        let json = #"{"data": null, "errors": [{"message": "Resource not accessible by integration"}]}"#
+        let reply = try GitHubClient.decoder.decode(GraphQLReply<GitHubReviewThread>.self, from: Data(json.utf8))
+        #expect(reply.errors?.first?.message == "Resource not accessible by integration")
+    }
+}

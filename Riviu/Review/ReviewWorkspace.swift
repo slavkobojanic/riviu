@@ -8,6 +8,7 @@ import RiviuSyntax
 enum InlineItem {
     case finding(ReviewFinding)
     case comment(ReviewComment)
+    case thread(GitHubReviewThread)
 }
 
 /// Asks the diff view to move to the next or previous find match. `count` changes on every request.
@@ -21,6 +22,12 @@ struct LineToReveal: Equatable {
     let id = UUID()
     let side: DiffSide
     let lineIndex: Int
+}
+
+/// A place in a review that Back and Forward return to: a pull request's overview (no file) or one of its files.
+struct ReviewLocation: Equatable {
+    let pullRequest: PullRequestReference
+    let filePath: String?
 }
 
 /// Which match is selected (0-based, or -1) out of how many, as reported by the diff view.
@@ -65,6 +72,12 @@ final class ReviewWorkspace {
 
     private(set) var comments: [ReviewComment] = []
     private(set) var viewedFileKeys: Set<String> = []
+    /// Files GitHub says changed after you marked them viewed.
+    private(set) var changedSinceViewedPaths: Set<String> = []
+    /// Conversations already on the pull request, from GitHub.
+    private(set) var threads: [GitHubReviewThread] = []
+    /// Why viewed files or conversations couldn't be loaded or saved.
+    private(set) var syncErrorMessage: String?
     private(set) var isSubmittingReview = false
 
     var isFindVisible = false
@@ -81,7 +94,16 @@ final class ReviewWorkspace {
     @ObservationIgnored private let account: GitHubAccount
     @ObservationIgnored private let aiReviews: AIReviewStore
     @ObservationIgnored private var openTask: Task<Void, Never>?
+    /// The pull request's GraphQL ID, needed to mark files as viewed on GitHub.
+    @ObservationIgnored private var gitHubPullRequestID: String?
+    /// Where "Next Conversation" continues from.
+    @ObservationIgnored private var lastRevealedThreadID: String?
     @ObservationIgnored private var expandedSegments: Set<Int> = []
+    /// Back and Forward history, oldest first.
+    private(set) var backHistory: [ReviewLocation] = []
+    private(set) var forwardHistory: [ReviewLocation] = []
+    /// Where to land once the pull request being loaded for Back or Forward arrives.
+    @ObservationIgnored private var locationToRestore: ReviewLocation?
     @ObservationIgnored private var syntaxByPath: [String: (base: SyntaxDocument, head: SyntaxDocument)] = [:]
 
     init(settings: AppSettings, account: GitHubAccount, aiReviews: AIReviewStore) {
@@ -106,6 +128,11 @@ final class ReviewWorkspace {
     // MARK: - Opening pull requests
 
     func open(_ reference: PullRequestReference) {
+        locationToRestore = nil
+        load(reference)
+    }
+
+    private func load(_ reference: PullRequestReference) {
         guard reference != pullRequest?.reference, reference != loadingReference else { return }
         openTask?.cancel()
         loadingReference = reference
@@ -119,6 +146,7 @@ final class ReviewWorkspace {
             } catch is CancellationError {
                 return
             } catch {
+                guard !Task.isCancelled else { return }
                 openErrorMessage = error.localizedDescription
             }
             loadingReference = nil
@@ -129,44 +157,125 @@ final class ReviewWorkspace {
         guard let reference = loadingReference ?? pullRequest?.reference else { return }
         loadingReference = nil
         pullRequest = nil
-        open(reference)
+        load(reference)
     }
 
     private func show(_ newPullRequest: PullRequest) {
+        let previous = location
         pullRequest = newPullRequest
         fileContents = [:]
         syntaxByPath = [:]
+        threads = []
+        changedSinceViewedPaths = []
+        syncErrorMessage = nil
+        gitHubPullRequestID = nil
+        loadGitHubState(for: newPullRequest.reference)
         selectedFilePath = nil
         // The first file loads in the background while the overview is shown.
         selectedFilePath = newPullRequest.files.first?.path
         showsOverview = true
+        if let restore = locationToRestore, restore.pullRequest == newPullRequest.reference {
+            locationToRestore = nil
+            apply(restore)
+        } else if let previous, previous.pullRequest != newPullRequest.reference {
+            remember(previous)
+        }
     }
 
     // MARK: - Navigation
 
     func showOverview() {
-        showsOverview = true
+        navigating { showsOverview = true }
     }
 
     /// Selects a file only if it's in the open pull request (folders in the sidebar are ignored).
     func selectFile(at path: String?) {
         guard let path, pullRequest?.file(at: path) != nil else { return }
-        selectedFilePath = path
-        showsOverview = false
+        navigating {
+            selectedFilePath = path
+            showsOverview = false
+        }
     }
 
     /// From the overview, the next file is the one already selected.
     func selectAdjacentFile(offset: Int) {
         if showsOverview {
-            showsOverview = false
+            navigating { showsOverview = false }
             return
         }
         guard let paths = pullRequest?.files.map(\.path), let current = selectedFilePath,
               let index = paths.firstIndex(of: current) else { return }
         let next = index + offset
         if paths.indices.contains(next) {
-            selectedFilePath = paths[next]
+            navigating { selectedFilePath = paths[next] }
         }
+    }
+
+    // MARK: - Back and Forward
+
+    /// The overview or file on screen.
+    var location: ReviewLocation? {
+        guard let pullRequest else { return nil }
+        return ReviewLocation(pullRequest: pullRequest.reference, filePath: showsOverview ? nil : selectedFilePath)
+    }
+
+    var canGoBack: Bool { !backHistory.isEmpty }
+    var canGoForward: Bool { !forwardHistory.isEmpty }
+
+    func goBack() {
+        guard let current = destination, let target = backHistory.popLast() else { return }
+        forwardHistory.append(current)
+        go(to: target)
+    }
+
+    func goForward() {
+        guard let current = destination, let target = forwardHistory.popLast() else { return }
+        backHistory.append(current)
+        go(to: target)
+    }
+
+    /// Where Back or Forward is headed, while its pull request loads; otherwise what's on screen.
+    private var destination: ReviewLocation? {
+        if let locationToRestore, locationToRestore.pullRequest == loadingReference { return locationToRestore }
+        return location
+    }
+
+    private func go(to target: ReviewLocation) {
+        if target.pullRequest == pullRequest?.reference {
+            // Stop loading any other pull request; the target is already open.
+            openTask?.cancel()
+            loadingReference = nil
+            openErrorMessage = nil
+            locationToRestore = nil
+            apply(target)
+        } else {
+            locationToRestore = target
+            load(target.pullRequest)
+        }
+    }
+
+    private func apply(_ target: ReviewLocation) {
+        if let path = target.filePath, pullRequest?.file(at: path) != nil {
+            selectedFilePath = path
+            showsOverview = false
+        } else {
+            showsOverview = true
+        }
+    }
+
+    /// Makes a change of location that Back returns from.
+    private func navigating(_ change: () -> Void) {
+        let before = location
+        change()
+        if let before, before != location {
+            remember(before)
+        }
+    }
+
+    private func remember(_ location: ReviewLocation) {
+        backHistory.append(location)
+        if backHistory.count > 200 { backHistory.removeFirst() }
+        forwardHistory = []
     }
 
     // MARK: - File contents
@@ -233,13 +342,20 @@ final class ReviewWorkspace {
         let commentAttachments = comments(inFileAt: path).map {
             Attachment(id: Self.attachmentID(forComment: $0.id), side: $0.side, lineIndex: $0.lines.upperBound)
         }
-        return findingAttachments + commentAttachments
+        let threadAttachments = threads(inFileAt: path).compactMap { thread in
+            thread.lineIndex.map { Attachment(id: Self.attachmentID(forThread: thread.id), side: thread.side, lineIndex: $0) }
+        }
+        return findingAttachments + threadAttachments + commentAttachments
     }
 
     private static func attachmentID(forFinding id: String) -> AttachmentID { AttachmentID("finding:" + id) }
     private static func attachmentID(forComment id: UUID) -> AttachmentID { AttachmentID("comment:" + id.uuidString) }
+    private static func attachmentID(forThread id: String) -> AttachmentID { AttachmentID("thread:" + id) }
 
     func inlineItem(for id: AttachmentID) -> InlineItem? {
+        if let thread = threads.first(where: { Self.attachmentID(forThread: $0.id) == id }) {
+            return .thread(thread)
+        }
         if let finding = findings.first(where: { Self.attachmentID(forFinding: $0.id) == id }) {
             return .finding(finding)
         }
@@ -283,14 +399,122 @@ final class ReviewWorkspace {
         pullRequest?.files.filter { isViewed($0.path) }.count ?? 0
     }
 
+    func isChangedSinceViewed(_ path: String) -> Bool {
+        changedSinceViewedPaths.contains(path)
+    }
+
+    /// Also marks the file on GitHub, and undoes the change if GitHub refuses it.
     func toggleViewedForSelectedFile() {
         guard let path = selectedFilePath else { return }
-        let key = viewedKey(for: path)
-        if viewedFileKeys.contains(key) {
-            viewedFileKeys.remove(key)
-        } else {
-            viewedFileKeys.insert(key)
+        let isNowViewed = !isViewed(path)
+        setViewed(isNowViewed, path: path)
+        changedSinceViewedPaths.remove(path)
+        guard let client = account.client, let pullRequestID = gitHubPullRequestID else { return }
+        Task {
+            do {
+                try await client.setFileViewed(isNowViewed, path: path, pullRequestID: pullRequestID)
+            } catch {
+                setViewed(!isNowViewed, path: path)
+                syncErrorMessage = "Couldn't mark \((path as NSString).lastPathComponent) on GitHub: \(error.localizedDescription)"
+            }
         }
+    }
+
+    private func setViewed(_ isViewed: Bool, path: String) {
+        if isViewed {
+            viewedFileKeys.insert(viewedKey(for: path))
+        } else {
+            viewedFileKeys.remove(viewedKey(for: path))
+        }
+    }
+
+    // MARK: - Syncing with GitHub
+
+    /// Loads which files you've viewed and the existing conversations.
+    private func loadGitHubState(for reference: PullRequestReference) {
+        guard !reference.isDemo, let client = account.client else { return }
+        Task {
+            async let viewedFiles = client.viewedFiles(repository: reference.repository, number: reference.number)
+            async let loadedThreads = client.reviewThreads(repository: reference.repository, number: reference.number)
+            do {
+                let viewed = try await viewedFiles
+                guard pullRequest?.reference == reference else { return }
+                gitHubPullRequestID = viewed.pullRequestID
+                for (path, state) in viewed.states {
+                    setViewed(state == .viewed, path: path)
+                    if state == .dismissed {
+                        changedSinceViewedPaths.insert(path)
+                    }
+                }
+                threads = try await loadedThreads
+                rebuildRows()
+            } catch {
+                guard pullRequest?.reference == reference else { return }
+                syncErrorMessage = "Couldn't load viewed files and conversations from GitHub: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    private func reloadThreads() async {
+        guard let reference = pullRequest?.reference, !reference.isDemo, let client = account.client else { return }
+        do {
+            let loaded = try await client.reviewThreads(repository: reference.repository, number: reference.number)
+            guard pullRequest?.reference == reference else { return }
+            threads = loaded
+            rebuildRows()
+        } catch {
+            syncErrorMessage = "Couldn't reload conversations: \(error.localizedDescription)"
+        }
+    }
+
+    // MARK: - Conversations
+
+    /// Threads shown in a file: those still on a line of the latest diff.
+    func threads(inFileAt path: String) -> [GitHubReviewThread] {
+        let inFile = threads.filter { $0.path == path }
+        guard case let .loaded(diff) = fileContents[path] else { return inFile }
+        return inFile.filter { thread in
+            thread.lineIndex.map { diff.lines(on: thread.side).indices.contains($0) } ?? false
+        }
+    }
+
+    func unresolvedThreadCount(forFileAt path: String) -> Int {
+        threads.filter { $0.path == path && !$0.isResolved }.count
+    }
+
+    /// Unresolved threads that can be shown in the diff, in file order.
+    var unresolvedThreads: [GitHubReviewThread] {
+        let order = pullRequest?.files.map(\.path) ?? []
+        return threads
+            .filter { !$0.isResolved && $0.lineIndex != nil }
+            .sorted { (order.firstIndex(of: $0.path) ?? 0, $0.lineIndex ?? 0) < (order.firstIndex(of: $1.path) ?? 0, $1.lineIndex ?? 0) }
+    }
+
+    func reveal(_ thread: GitHubReviewThread) {
+        guard let lineIndex = thread.lineIndex else { return }
+        reveal(lineIndex: lineIndex, on: thread.side, inFileAt: thread.path)
+        lastRevealedThreadID = thread.id
+    }
+
+    /// Jumps to the next or previous unresolved conversation, wrapping around.
+    func revealAdjacentThread(offset: Int) {
+        let unresolved = unresolvedThreads
+        guard !unresolved.isEmpty else { return }
+        let current = unresolved.firstIndex { $0.id == lastRevealedThreadID }
+        let next = current.map { ($0 + offset + unresolved.count) % unresolved.count } ?? (offset > 0 ? 0 : unresolved.count - 1)
+        reveal(unresolved[next])
+    }
+
+    func reply(to thread: GitHubReviewThread, body: String) async throws {
+        guard let client = account.client else { throw PullRequestLoader.LoadError.notSignedIn }
+        _ = try await client.reply(to: thread.id, body: body)
+        await reloadThreads()
+    }
+
+    func setResolved(_ isResolved: Bool, thread: GitHubReviewThread) async throws {
+        guard let client = account.client else { throw PullRequestLoader.LoadError.notSignedIn }
+        try await client.setThreadResolved(isResolved, threadID: thread.id)
+        await reloadThreads()
     }
 
     // MARK: - Find in file
@@ -344,8 +568,13 @@ final class ReviewWorkspace {
 
     /// Opens the file a finding is in and scrolls to it.
     func reveal(_ finding: ReviewFinding) {
-        selectFile(at: finding.filePath)
-        lineToReveal = LineToReveal(side: finding.side, lineIndex: finding.lineIndex)
+        reveal(lineIndex: finding.lineIndex, on: finding.side, inFileAt: finding.filePath)
+    }
+
+    /// Opens a file and scrolls to a line.
+    func reveal(lineIndex: Int, on side: DiffSide, inFileAt path: String) {
+        selectFile(at: path)
+        lineToReveal = LineToReveal(side: side, lineIndex: lineIndex)
     }
 
     func dismissFinding(_ finding: ReviewFinding) {
@@ -440,13 +669,20 @@ final class ReviewWorkspace {
         isSubmittingReview = true
         defer { isSubmittingReview = false }
         try await client.submitReview(review, repository: pullRequest.reference.repository, number: pullRequest.number)
-        for comment in pending {
-            updateComment(comment.id) { $0.isSubmitted = true }
-        }
+        // Posted comments come back from GitHub as conversations.
+        let postedIDs = Set(pending.map(\.id))
+        comments.removeAll { postedIDs.contains($0.id) }
+        await reloadThreads()
     }
 
     private func updateComment(_ id: UUID, _ change: (inout ReviewComment) -> Void) {
         guard let index = comments.firstIndex(where: { $0.id == id }) else { return }
         change(&comments[index])
     }
+}
+
+extension GitHubReviewThread {
+    var side: DiffSide { diffSide == "LEFT" ? .base : .head }
+    /// 0-based, or nil when the thread's lines are gone from the latest diff.
+    var lineIndex: Int? { line.map { $0 - 1 } }
 }

@@ -13,12 +13,10 @@ struct CommentCard: View {
                     .font(.title3)
                 Text("You")
                     .font(.headline)
-                Text("\(comment.isSubmitted ? "Posted" : "Pending") · \(comment.lineLabel)")
+                Text("Pending · \(comment.lineLabel)")
                     .font(.subheadline)
                 Spacer()
-                if !comment.isSubmitted {
-                    editButtons
-                }
+                editButtons
             }
             StructuredText(markdown: comment.body)
                 .textual.textSelection(.enabled)

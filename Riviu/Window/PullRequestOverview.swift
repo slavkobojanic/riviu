@@ -1,3 +1,4 @@
+import RiviuGitHub
 import RiviuMarkdown
 import SwiftUI
 
@@ -11,9 +12,17 @@ struct PullRequestOverview: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
                 OverviewHeader(pullRequest: pullRequest)
+                if let message = workspace.syncErrorMessage {
+                    Label(message, systemImage: "exclamationmark.triangle")
+                        .font(.callout)
+                        .foregroundStyle(.orange)
+                }
                 AISummaryCard(pullRequest: pullRequest, aiReviews: aiReviews)
                 if !workspace.findings.isEmpty {
                     FindingsSection(findings: workspace.findings, workspace: workspace)
+                }
+                if !workspace.threads.isEmpty {
+                    ConversationsSection(workspace: workspace)
                 }
                 DescriptionSection(description: pullRequest.summary)
             }
@@ -30,7 +39,7 @@ private struct OverviewHeader: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(pullRequest.reference.isDemo ? "Demo #\(pullRequest.number)" : pullRequest.reference.id)
+            Text(pullRequest.reference.isDemo ? "Demo #\(String(pullRequest.number))" : pullRequest.reference.id)
                 .font(.subheadline.weight(.semibold))
             Text(pullRequest.title)
                 .font(.largeTitle.weight(.bold))
@@ -180,6 +189,64 @@ private struct FindingRow: View {
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
         .help("Open \(finding.filePath)")
+    }
+}
+
+/// Conversations already on the pull request; open ones first.
+private struct ConversationsSection: View {
+    let workspace: ReviewWorkspace
+
+    var body: some View {
+        let open = workspace.threads.filter { !$0.isResolved }
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Conversations (\(open.count) open, \(workspace.threads.count - open.count) resolved)")
+                .font(.title3.weight(.semibold))
+            ForEach(open) { thread in
+                ConversationRow(thread: thread) { workspace.reveal(thread) }
+            }
+            if !workspace.unresolvedThreads.isEmpty {
+                Text("⌥⌘] jumps to the next open conversation.")
+                    .font(.caption)
+            }
+        }
+    }
+}
+
+private struct ConversationRow: View {
+    let thread: GitHubReviewThread
+    let open: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: open) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Image(systemName: "bubble.left.and.bubble.right")
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("\(thread.allComments.first?.author?.login ?? "Someone") on \((thread.path as NSString).lastPathComponent)\(thread.line.map { ", line \($0)" } ?? "")")
+                        .font(.headline)
+                    InlineText(markdown: thread.allComments.last?.body ?? "")
+                        .font(.callout)
+                        .lineLimit(2)
+                }
+                Spacer(minLength: 8)
+                if thread.lineIndex == nil {
+                    Text("Outdated")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.orange)
+                } else {
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.fill.opacity(isHovered ? 0.9 : 0.5), in: .rect(cornerRadius: 14))
+            .contentShape(.rect(cornerRadius: 14))
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .disabled(thread.lineIndex == nil)
+        .help(thread.lineIndex == nil ? "The lines this was on have changed" : "Open \(thread.path)")
     }
 }
 

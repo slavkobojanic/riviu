@@ -24,6 +24,8 @@ struct InlineItemView: View {
             CommentComposer(comment: comment, workspace: workspace)
         case let .comment(comment):
             CommentCard(comment: comment, workspace: workspace)
+        case let .thread(thread):
+            ThreadCard(thread: thread, workspace: workspace)
         case nil:
             EmptyView()
         }
