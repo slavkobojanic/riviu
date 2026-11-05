@@ -146,8 +146,6 @@ struct TourCarousel: View {
     let workspace: ReviewWorkspace
     let settings: AppSettings
 
-    /// Each card's vertical center in the scroll view, to find the one nearest the middle.
-    @State private var cardCenters: [Int: CGFloat] = [:]
     @State private var keyMonitor: Any?
     /// The window the tour is shown in, so its keys don't fire in other windows or tabs.
     @State private var window: NSWindow?
@@ -166,7 +164,7 @@ struct TourCarousel: View {
             Divider()
             carousel
             Divider()
-            keyHints
+            footer
         }
         .background(Color(nsColor: .underPageBackgroundColor))
         .background {
@@ -199,16 +197,15 @@ struct TourCarousel: View {
             // window's minimum size (measuring the scroll view's own height did, and looped).
             GeometryReader { geometry in
                 ScrollViewReader { proxy in
+                    // Only ↑ ↓ and Back and Next move between cards. Without vertical scrolling, sideways swipes
+                    // scroll the code instead of being taken for a scroll to the next card.
                     ScrollView(.vertical) {
                         LazyVStack(spacing: 32) {
                             // Half a screen of space above and below lets the first and last cards reach the middle.
                             Color.clear.frame(height: geometry.size.height / 2)
                             ForEach(0..<cardCount, id: \.self) { index in
-                                card(at: index)
+                                card(at: index, maxCodeHeight: max(160, geometry.size.height * 0.5))
                                     .id(index)
-                                    .onGeometryChange(for: CGFloat.self) { $0.frame(in: .scrollView).midY } action: {
-                                        cardCenters[index] = $0
-                                    }
                                     .visualEffect { [reduceMotion, isFocused = workspace.tourCardIndex == index] content, geometry in
                                         // With Reduce Motion on, cards out of focus are just dimmed, and don't move.
                                         let distance = reduceMotion ? 0 : Self.distanceFromMiddle(geometry)
@@ -227,9 +224,7 @@ struct TourCarousel: View {
                         .frame(maxWidth: .infinity)
                     }
                     .scrollIndicators(.never)
-                    .onScrollPhaseChange { _, phase in
-                        if phase == .idle { snapToNearestCard(proxy, middle: geometry.size.height / 2) }
-                    }
+                    .scrollDisabled(true)
                     .onChange(of: workspace.tourCardIndex) { _, index in
                         guard let index else { return }
                         withAnimation(scrollAnimation) { proxy.scrollTo(index, anchor: .center) }
@@ -262,13 +257,13 @@ struct TourCarousel: View {
     }
 
     @ViewBuilder
-    private func card(at index: Int) -> some View {
+    private func card(at index: Int, maxCodeHeight: CGFloat) -> some View {
         let isFocused = workspace.tourCardIndex == index
         Group {
             if tour.stops.indices.contains(index) {
                 TourStopCard(stop: tour.stops[index], number: index + 1, total: tour.stops.count, isFocused: isFocused,
                              theme: settings.themeFamily.theme(dark: colorScheme == .dark), font: settings.editorFont,
-                             lineSpacing: settings.lineSpacing) {
+                             lineSpacing: settings.lineSpacing, maxCodeHeight: maxCodeHeight) {
                     workspace.openCurrentTourStop()
                 }
             } else {
@@ -294,16 +289,6 @@ struct TourCarousel: View {
         return min(max(offset / (viewport.height / 2), -1), 1)
     }
 
-    /// When scrolling stops, the card nearest the middle comes into focus and moves to the exact middle.
-    private func snapToNearestCard(_ proxy: ScrollViewProxy, middle: CGFloat) {
-        guard let nearest = cardCenters.min(by: { abs($0.value - middle) < abs($1.value - middle) })?.key else { return }
-        if nearest != workspace.tourCardIndex {
-            workspace.focusTourCard(nearest) // moves it to the middle through onChange
-        } else if abs((cardCenters[nearest] ?? middle) - middle) > 2 {
-            withAnimation(scrollAnimation) { proxy.scrollTo(nearest, anchor: .center) }
-        }
-    }
-
     /// A bar above the cards, so End Tour never sits on top of one.
     private var header: some View {
         HStack {
@@ -318,14 +303,21 @@ struct TourCarousel: View {
         .background(Color(nsColor: .windowBackgroundColor))
     }
 
-    /// A bar below the cards with the keys that drive the tour.
-    private var keyHints: some View {
-        Text("↑↓ Move   ↩ Open in Diff   ⎋ End Tour")
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .padding(8)
-            .frame(maxWidth: .infinity)
-            .background(Color(nsColor: .windowBackgroundColor))
+    /// Back and Next, in the middle of a bar below the cards. ↑ and ↓ do the same.
+    private var footer: some View {
+        let index = workspace.tourCardIndex ?? 0
+        return HStack(spacing: 12) {
+            Button("Back", systemImage: "chevron.up") { workspace.advanceTour(by: -1) }
+                .disabled(index == 0)
+                .help("Previous stop (↑)")
+            Button("Next", systemImage: "chevron.down") { workspace.advanceTour(by: 1) }
+                .disabled(index >= cardCount - 1)
+                .help("Next stop (↓)")
+        }
+        .buttonStyle(.bordered)
+        .padding(10)
+        .frame(maxWidth: .infinity)
+        .background(Color(nsColor: .windowBackgroundColor))
     }
 }
 
@@ -387,6 +379,7 @@ private struct TourStopCard: View {
     let theme: EditorTheme
     let font: NSFont
     let lineSpacing: LineSpacing
+    let maxCodeHeight: CGFloat
     let open: () -> Void
 
     var body: some View {
@@ -402,7 +395,7 @@ private struct TourStopCard: View {
             Text(markdown: stop.explanation)
                 .font(.body)
                 .fixedSize(horizontal: false, vertical: true)
-            TourExcerptView(stop: stop, theme: theme, font: font, lineSpacing: lineSpacing, open: open)
+            TourExcerptView(stop: stop, theme: theme, font: font, lineSpacing: lineSpacing, maxHeight: maxCodeHeight, open: open)
         }
         .padding(22)
         .cardBackground(isFocused: isFocused)
@@ -415,6 +408,8 @@ private struct TourExcerptView: View {
     let theme: EditorTheme
     let font: NSFont
     let lineSpacing: LineSpacing
+    /// Longer excerpts scroll up and down inside the card, since the tour itself doesn't scroll.
+    let maxHeight: CGFloat
     let open: () -> Void
 
     /// Each line with its syntax colors, once parsed.
@@ -422,6 +417,8 @@ private struct TourExcerptView: View {
     /// How wide the code area is, so the added and removed colors reach its edge even on short lines.
     @State private var visibleWidth: CGFloat = 0
     @Environment(\.colorSchemeContrast) private var colorSchemeContrast
+
+    private var isTall: Bool { CGFloat(stop.excerpt.count) * rowHeight > maxHeight }
 
     /// The same height as a row in the diff.
     private var rowHeight: CGFloat {
@@ -447,7 +444,7 @@ private struct TourExcerptView: View {
             .padding(.vertical, 8)
             Divider()
             // Long lines scroll sideways, all together, instead of being cut off.
-            ScrollView(.horizontal) {
+            ScrollView(isTall ? [.horizontal, .vertical] : .horizontal) {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(stop.excerpt.enumerated()), id: \.offset) { index, line in
                         ExcerptLine(line: line, text: highlighted.indices.contains(index) ? highlighted[index] : AttributedString(lines[index]),
@@ -467,6 +464,9 @@ private struct TourExcerptView: View {
                     }
                 }
             }
+            .frame(height: isTall ? maxHeight : nil)
+            // The tour turns scrolling off for its cards; the code scrolls anyway.
+            .scrollDisabled(false)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { visibleWidth = $0 }
             .font(Font(font))
             .padding(.vertical, 4)
