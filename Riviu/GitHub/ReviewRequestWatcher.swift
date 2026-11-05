@@ -21,7 +21,10 @@ final class ReviewRequestWatcher {
     @ObservationIgnored private var loop: Task<Void, Never>?
     /// `isNew` is false for requests that were already waiting, which don't get a notification when reviewed.
     @ObservationIgnored private var reviewQueue: [(summary: GitHubPullRequestSummary, reference: PullRequestReference, isNew: Bool)] = []
-    @ObservationIgnored private var isWorkingThroughQueue = false
+    @ObservationIgnored private var runningReviews = 0
+    /// Reviews run side by side, up to this many. Each one is a CLI process or an API request, and providers
+    /// rate-limit, so a backlog of 30 requests doesn't start 30 at once.
+    private static let maxConcurrentReviews = 4
 
     init(account: GitHubAccount, settings: AppSettings, aiReviews: AIReviewStore, inbox: PullRequestInbox,
          notifications: ReviewRequestNotifications) {
@@ -97,20 +100,22 @@ final class ReviewRequestWatcher {
             aiReviews.queue(reference)
             reviewQueue.append((summary, reference, isNew))
         }
-        Task { await workThroughReviewQueue() }
+        startQueuedReviews()
     }
 
     // MARK: - AI reviews of new requests
 
-    /// One review at a time, so a burst of requests doesn't start several AI runs at once.
-    private func workThroughReviewQueue() async {
-        guard !isWorkingThroughQueue else { return }
-        isWorkingThroughQueue = true
-        while !reviewQueue.isEmpty {
+    /// Starts queued reviews until `maxConcurrentReviews` are running. Each one starts the next when it finishes.
+    private func startQueuedReviews() {
+        while runningReviews < Self.maxConcurrentReviews, !reviewQueue.isEmpty {
             let next = reviewQueue.removeFirst()
-            await review(next.summary, reference: next.reference, notifies: next.isNew)
+            runningReviews += 1
+            Task {
+                await review(next.summary, reference: next.reference, notifies: next.isNew)
+                runningReviews -= 1
+                startQueuedReviews()
+            }
         }
-        isWorkingThroughQueue = false
     }
 
     private func review(_ summary: GitHubPullRequestSummary, reference: PullRequestReference, notifies: Bool) async {
