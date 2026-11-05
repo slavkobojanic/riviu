@@ -7,6 +7,11 @@ struct AnthropicStreamParserTests {
         #expect(AnthropicStreamParser.parse(line: line) == .text("Hello"))
     }
 
+    @Test func readsThinkingSummaries() {
+        let line = #"data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"Checking the diff"}}"#
+        #expect(AnthropicStreamParser.parse(line: line) == .thinking("Checking the diff"))
+    }
+
     @Test func skipsEventNamesAndOtherEvents() {
         #expect(AnthropicStreamParser.parse(line: "event: content_block_delta") == .ignored)
         #expect(AnthropicStreamParser.parse(line: #"data: {"type":"message_stop"}"#) == .ignored)
@@ -27,6 +32,13 @@ struct ClaudeCodeStreamParserTests {
     @Test func readsPartialText() {
         let line = #"{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"OK"}},"session_id":"x"}"#
         #expect(ClaudeCodeStreamParser.parse(line: line) == .text("OK"))
+    }
+
+    @Test func readsThinkingButSkipsEmptyThinking() {
+        let thought = #"{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"Hmm"}}}"#
+        let empty = #"{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":""}}}"#
+        #expect(ClaudeCodeStreamParser.parse(line: thought) == .thinking("Hmm"))
+        #expect(ClaudeCodeStreamParser.parse(line: empty) == .ignored)
     }
 
     @Test func reportsErrorResults() {

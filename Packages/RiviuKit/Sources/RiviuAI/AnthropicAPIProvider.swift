@@ -17,7 +17,7 @@ public struct AnthropicAPIProvider: AIProvider {
         self.model = model
     }
 
-    public func streamReply(to request: AIRequest) -> AsyncThrowingStream<String, Error> {
+    public func streamEvents(to request: AIRequest) -> AsyncThrowingStream<AIStreamEvent, Error> {
         let urlRequest = makeRequest(for: request)
         return AsyncThrowingStream { continuation in
             let task = Task {
@@ -31,7 +31,8 @@ public struct AnthropicAPIProvider: AIProvider {
                     }
                     for try await line in bytes.lines {
                         switch AnthropicStreamParser.parse(line: line) {
-                        case let .text(text): continuation.yield(text)
+                        case let .text(text): continuation.yield(.text(text))
+                        case let .thinking(text): continuation.yield(.thinking(text))
                         case .refused: throw AIProviderError.refused
                         case let .error(message): throw AIProviderError.requestFailed(status: status, message: message)
                         case .ignored: break
@@ -63,6 +64,8 @@ public struct AnthropicAPIProvider: AIProvider {
             "model": model,
             "max_tokens": 32_000,
             "stream": true,
+            // "summarized" sends a summary of the model's reasoning, which chat shows while it thinks.
+            "thinking": ["type": "adaptive", "display": "summarized"],
             "system": request.system,
             "messages": request.messages.map { ["role": $0.role.rawValue, "content": $0.text] },
         ]
@@ -91,6 +94,7 @@ public struct AnthropicAPIProvider: AIProvider {
 enum AnthropicStreamParser {
     enum Output: Equatable {
         case text(String)
+        case thinking(String)
         case refused
         case error(String)
         case ignored
@@ -100,6 +104,7 @@ enum AnthropicStreamParser {
         struct Delta: Decodable {
             let type: String?
             let text: String?
+            let thinking: String?
             let stop_reason: String?
         }
 
@@ -121,6 +126,8 @@ enum AnthropicStreamParser {
         switch event.type {
         case "content_block_delta" where event.delta?.type == "text_delta":
             return .text(event.delta?.text ?? "")
+        case "content_block_delta" where event.delta?.type == "thinking_delta":
+            return .thinking(event.delta?.thinking ?? "")
         case "message_delta" where event.delta?.stop_reason == "refusal":
             return .refused
         case "error":

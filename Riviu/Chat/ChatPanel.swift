@@ -82,7 +82,8 @@ private struct ChatConversation: View {
                 LazyVStack(alignment: .leading, spacing: 16) {
                     if let chat = chats.activeChat, chat.pullRequest == pullRequest.reference {
                         ForEach(chat.messages) { message in
-                            ChatMessageRow(message: message, isStreaming: chats.isReplying && message.id == chat.messages.last?.id)
+                            ChatMessageRow(message: message,
+                                           replyStartedAt: message.id == chat.messages.last?.id ? chats.replyStartedAt : nil)
                                 .id(message.id)
                         }
                     } else {
@@ -91,7 +92,7 @@ private struct ChatConversation: View {
                 }
                 .padding(14)
             }
-            .onChange(of: chats.activeChat?.messages.last?.text) {
+            .onChange(of: (chats.activeChat?.messages.last?.text ?? "") + (chats.activeChat?.messages.last?.thinking ?? "")) {
                 if let last = chats.activeChat?.messages.last {
                     proxy.scrollTo(last.id, anchor: .bottom)
                 }
@@ -133,7 +134,8 @@ private struct ChatConversation: View {
 
 private struct ChatMessageRow: View {
     let message: ChatMessage
-    let isStreaming: Bool
+    /// Set while this message is the reply being written.
+    let replyStartedAt: Date?
 
     var body: some View {
         switch message.role {
@@ -149,16 +151,83 @@ private struct ChatMessageRow: View {
             HStack(alignment: .top, spacing: 8) {
                 Image(systemName: "sparkles")
                     .foregroundStyle(.purple)
-                if message.isError {
-                    AIErrorView(message: message.text)
-                } else if message.text.isEmpty && isStreaming {
-                    ProgressView()
-                        .controlSize(.small)
-                } else {
-                    StructuredText(markdown: message.text)
-                        .textual.textSelection(.enabled)
+                VStack(alignment: .leading, spacing: 6) {
+                    if message.isError {
+                        AIErrorView(message: message.text)
+                    } else if message.text.isEmpty, let replyStartedAt {
+                        ThinkingStatus(startedAt: replyStartedAt, thinking: message.thinking)
+                    } else {
+                        if let seconds = message.thoughtSeconds, seconds >= 2 {
+                            ThoughtSummary(seconds: seconds, thinking: message.thinking)
+                        }
+                        StructuredText(markdown: message.text)
+                            .textual.textSelection(.enabled)
+                    }
                 }
             }
+        }
+    }
+}
+
+/// "Thinking 12s" and the model's latest thought, so a long think doesn't look frozen.
+private struct ThinkingStatus: View {
+    let startedAt: Date
+    let thinking: String?
+
+    /// The last paragraph of the reasoning, without Markdown bold markers.
+    private var latestThought: String? {
+        let paragraphs = (thinking ?? "").components(separatedBy: "\n\n")
+            .map { $0.replacingOccurrences(of: "**", with: "").trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        return paragraphs.last
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            TimelineView(.periodic(from: startedAt, by: 1)) { context in
+                HStack(spacing: 6) {
+                    ProgressView()
+                        .controlSize(.mini)
+                    Text("Thinking")
+                    Text(Duration.seconds(Int(context.date.timeIntervalSince(startedAt)))
+                        .formatted(.units(allowed: [.minutes, .seconds], width: .narrow)))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                }
+            }
+            if let latestThought {
+                Text(latestThought)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+            }
+        }
+    }
+}
+
+/// "Thought for 12s", which shows the reasoning when there is some.
+private struct ThoughtSummary: View {
+    let seconds: Int
+    let thinking: String?
+    @State private var isExpanded = false
+
+    private var title: String {
+        "Thought for \(Duration.seconds(seconds).formatted(.units(allowed: [.minutes, .seconds], width: .narrow)))"
+    }
+
+    var body: some View {
+        if let thinking, !thinking.isEmpty {
+            DisclosureGroup(title, isExpanded: $isExpanded) {
+                StructuredText(markdown: thinking)
+                    .textual.textSelection(.enabled)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 4)
+            }
+            .foregroundStyle(.secondary)
+        } else {
+            Text(title)
+                .foregroundStyle(.secondary)
         }
     }
 }

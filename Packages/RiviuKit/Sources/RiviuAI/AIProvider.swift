@@ -27,9 +27,17 @@ public struct AIRequest: Sendable {
     }
 }
 
+/// A piece of a streamed reply.
+public enum AIStreamEvent: Sendable, Equatable {
+    /// More of the answer.
+    case text(String)
+    /// More of the model's summarized reasoning, from providers that share it.
+    case thinking(String)
+}
+
 /// Something that can answer a conversation, streaming the reply as it is written.
 public protocol AIProvider: Sendable {
-    func streamReply(to request: AIRequest) -> AsyncThrowingStream<String, Error>
+    func streamEvents(to request: AIRequest) -> AsyncThrowingStream<AIStreamEvent, Error>
 }
 
 public enum AIProviderError: LocalizedError, Equatable {
@@ -56,6 +64,24 @@ public enum AIProviderError: LocalizedError, Equatable {
 }
 
 extension AIProvider {
+    /// Just the answer, without the reasoning.
+    public func streamReply(to request: AIRequest) -> AsyncThrowingStream<String, Error> {
+        let events = streamEvents(to: request)
+        return AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    for try await event in events {
+                        if case let .text(text) = event { continuation.yield(text) }
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
     /// Collects a whole reply. Handy for connection tests.
     public func reply(to request: AIRequest) async throws -> String {
         var text = ""

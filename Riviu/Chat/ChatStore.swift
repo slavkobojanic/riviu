@@ -7,6 +7,10 @@ struct ChatMessage: Identifiable, Codable {
     let role: AIMessage.Role
     var text: String
     var isError = false
+    /// The model's summarized reasoning, from providers that share it.
+    var thinking: String?
+    /// How long the model thought before it started answering.
+    var thoughtSeconds: Int?
 
     init(role: AIMessage.Role, text: String, isError: Bool = false) {
         id = UUID()
@@ -34,6 +38,8 @@ final class ChatStore {
     /// The chat shown in the panel. nil shows an empty new chat for the current pull request.
     var activeChatID: UUID?
     private(set) var isReplying = false
+    /// When the current reply was asked for, to show how long the model has been thinking.
+    private(set) var replyStartedAt: Date?
 
     @ObservationIgnored private let makeProvider: () throws -> AIProvider
     @ObservationIgnored private var replyTask: Task<Void, Never>?
@@ -79,11 +85,23 @@ final class ChatStore {
         update(chatID) { $0.messages.append(ChatMessage(role: .assistant, text: "")) }
 
         isReplying = true
+        let startedAt = Date.now
+        replyStartedAt = startedAt
         replyTask = Task {
             do {
                 let provider = try makeProvider()
-                for try await chunk in provider.streamReply(to: AIRequest(system: systemPrompt, messages: history)) {
-                    updateLastMessage(in: chatID) { $0.text += chunk }
+                for try await event in provider.streamEvents(to: AIRequest(system: systemPrompt, messages: history)) {
+                    updateLastMessage(in: chatID) { message in
+                        switch event {
+                        case let .text(text):
+                            if message.thoughtSeconds == nil {
+                                message.thoughtSeconds = Int(Date.now.timeIntervalSince(startedAt))
+                            }
+                            message.text += text
+                        case let .thinking(text):
+                            message.thinking = (message.thinking ?? "") + text
+                        }
+                    }
                 }
             } catch is CancellationError {
                 // Stopped by the user; keep whatever arrived.
@@ -94,6 +112,7 @@ final class ChatStore {
                 }
             }
             isReplying = false
+            replyStartedAt = nil
             save()
         }
     }
@@ -102,6 +121,7 @@ final class ChatStore {
         replyTask?.cancel()
         replyTask = nil
         isReplying = false
+        replyStartedAt = nil
     }
 
     // MARK: - Helpers

@@ -16,7 +16,7 @@ public struct CommandLineProvider: AIProvider {
         self.workingDirectory = workingDirectory
     }
 
-    public func streamReply(to request: AIRequest) -> AsyncThrowingStream<String, Error> {
+    public func streamEvents(to request: AIRequest) -> AsyncThrowingStream<AIStreamEvent, Error> {
         let prompt = Self.singlePrompt(from: request)
         let replyFile = FileManager.default.temporaryDirectory.appending(path: "riviu-reply-\(UUID().uuidString).txt")
         let child = ChildProcess(executable: executable,
@@ -32,12 +32,13 @@ public struct CommandLineProvider: AIProvider {
                         switch tool {
                         case .claudeCode:
                             switch ClaudeCodeStreamParser.parse(line: line) {
-                            case let .text(text): continuation.yield(text)
+                            case let .text(text): continuation.yield(.text(text))
+                            case let .thinking(text): continuation.yield(.thinking(text))
                             case let .error(message): throw AIProviderError.commandFailed(message)
                             case .ignored: break
                             }
                         case .cursor, .pi:
-                            continuation.yield(line + "\n")
+                            continuation.yield(.text(line + "\n"))
                         case .codex:
                             break // Codex writes its final answer to `replyFile` instead.
                         }
@@ -47,7 +48,7 @@ public struct CommandLineProvider: AIProvider {
                         throw AIProviderError.commandFailed(CommandLineErrorText.summary(of: result.errorOutput, tool: tool))
                     }
                     if tool == .codex, let reply = try? String(contentsOf: replyFile, encoding: .utf8) {
-                        continuation.yield(reply)
+                        continuation.yield(.text(reply))
                     }
                     try? FileManager.default.removeItem(at: replyFile)
                     continuation.finish()
@@ -86,6 +87,8 @@ public struct CommandLineProvider: AIProvider {
 enum ClaudeCodeStreamParser {
     enum Output: Equatable {
         case text(String)
+        /// Claude Code leaves this empty in print mode, but passes it on if that changes.
+        case thinking(String)
         case error(String)
         case ignored
     }
@@ -95,6 +98,7 @@ enum ClaudeCodeStreamParser {
             struct Delta: Decodable {
                 let type: String?
                 let text: String?
+                let thinking: String?
             }
             let type: String
             let delta: Delta?
@@ -110,6 +114,10 @@ enum ClaudeCodeStreamParser {
         guard let decoded = try? JSONDecoder().decode(Line.self, from: Data(line.utf8)) else { return .ignored }
         if decoded.type == "stream_event", decoded.event?.type == "content_block_delta", decoded.event?.delta?.type == "text_delta" {
             return .text(decoded.event?.delta?.text ?? "")
+        }
+        if decoded.type == "stream_event", decoded.event?.type == "content_block_delta",
+           decoded.event?.delta?.type == "thinking_delta", let thinking = decoded.event?.delta?.thinking, !thinking.isEmpty {
+            return .thinking(thinking)
         }
         if decoded.type == "result", decoded.is_error == true {
             return .error(decoded.result ?? "Claude Code reported an error.")
