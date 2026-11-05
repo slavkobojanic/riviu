@@ -6,12 +6,12 @@ import SwiftUI
 /// CI checks on the reviewed commit. Failed GitHub Actions jobs can be explained by the AI.
 struct ChecksSection: View {
     let workspace: ReviewWorkspace
-    @State private var showsPassing = false
+    @State private var showsFinished = false
 
+    /// Failed and running checks are always listed. Finished ones (passed, skipped…) are folded into one counted row.
     private var failing: [GitHubCheckRun] { workspace.checkRuns.filter(\.isFailure) }
-    private var others: [GitHubCheckRun] { workspace.checkRuns.filter { !$0.isFailure } }
-    /// Passing checks are folded away only when something is failing; otherwise they're all listed.
-    private var hasHiddenChecks: Bool { !failing.isEmpty && !others.isEmpty }
+    private var running: [GitHubCheckRun] { workspace.checkRuns.filter(\.isRunning) }
+    private var finished: [GitHubCheckRun] { workspace.checkRuns.filter { !$0.isFailure && !$0.isRunning } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -19,20 +19,52 @@ struct ChecksSection: View {
                 Text("Checks")
                     .font(.title3.weight(.semibold))
                 ChecksSummaryLabel(checkRuns: workspace.checkRuns)
-                Spacer()
-                if hasHiddenChecks {
-                    Button(showsPassing ? "Hide Others" : "Show All \(workspace.checkRuns.count)") { showsPassing.toggle() }
-                        .buttonStyle(.borderless)
-                }
             }
             ForEach(failing) { run in
                 FailedCheckRow(run: run, workspace: workspace)
             }
-            if showsPassing || failing.isEmpty {
-                ForEach(others) { run in
-                    CheckRow(run: run)
+            ForEach(running) { run in
+                CheckRow(run: run)
+            }
+            if !finished.isEmpty {
+                FinishedChecksRow(checkRuns: finished, isExpanded: $showsFinished)
+                if showsFinished {
+                    ForEach(finished) { run in
+                        CheckRow(run: run)
+                            .padding(.leading, 26)
+                    }
                 }
             }
+        }
+    }
+}
+
+/// "12 passed, 2 skipped", with a button to list them.
+private struct FinishedChecksRow: View {
+    let checkRuns: [GitHubCheckRun]
+    @Binding var isExpanded: Bool
+
+    /// Counts by conclusion, most common first: "12 passed, 2 skipped".
+    private var summary: String {
+        let counts = Dictionary(grouping: checkRuns) { run in
+            run.conclusion == "success" ? "passed" : (run.conclusion ?? "done").replacingOccurrences(of: "_", with: " ")
+        }
+        return counts.sorted { $0.value.count > $1.value.count }
+            .map { "\($0.value.count) \($0.key)" }
+            .joined(separator: ", ")
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            if checkRuns.contains(where: { $0.conclusion == "success" }) {
+                Image(systemName: "checkmark.circle.fill").foregroundStyle(.statusGreen)
+            } else {
+                Image(systemName: "minus.circle.fill").foregroundStyle(.secondary)
+            }
+            Text(summary)
+            Spacer()
+            Button(isExpanded ? "Hide" : "Show All") { isExpanded.toggle() }
+                .buttonStyle(.borderless)
         }
     }
 }
