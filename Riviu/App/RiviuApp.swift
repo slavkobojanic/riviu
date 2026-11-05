@@ -1,3 +1,4 @@
+import RiviuSupport
 import SwiftUI
 
 @main
@@ -15,6 +16,7 @@ struct RiviuApp: App {
     private let updates = Updates()
 
     init() {
+        ExecutableLocator.warmUp()
         let settings = AppSettings()
         let account = GitHubAccount()
         _settings = State(initialValue: settings)

@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// Finds command-line tools the way the user's Terminal would.
 ///
@@ -50,7 +51,31 @@ public enum ExecutableLocator {
         return nil
     }
 
+    /// Loads the shell's `PATH` and keys in the background, so the first view that needs them doesn't wait.
+    public static func warmUp() {
+        DispatchQueue.global(qos: .userInitiated).async {
+            _ = environment
+        }
+    }
+
+    /// Runs the shell on another thread and waits for it with a semaphore, at most 5 seconds.
+    ///
+    /// `Process.waitUntilExit()` runs the current run loop while it waits. On the main thread that lets SwiftUI
+    /// redraw while `searchPath` is still being set up, the redraw reads `searchPath` again, and the app crashes
+    /// ("trying to lock recursively"). A semaphore waits without running the run loop.
     private static func runAndRead(_ executable: String, arguments: [String]) -> String? {
+        let result = OSAllocatedUnfairLock<String?>(initialState: nil)
+        let finished = DispatchSemaphore(value: 0)
+        DispatchQueue.global(qos: .userInitiated).async {
+            let output = readOutput(executable, arguments: arguments)
+            result.withLock { $0 = output }
+            finished.signal()
+        }
+        guard finished.wait(timeout: .now() + 5) == .success else { return nil }
+        return result.withLock { $0 }
+    }
+
+    private static func readOutput(_ executable: String, arguments: [String]) -> String? {
         let process = Process()
         let output = Pipe()
         process.executableURL = URL(filePath: executable)
