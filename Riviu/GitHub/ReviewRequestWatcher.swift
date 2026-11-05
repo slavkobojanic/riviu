@@ -3,7 +3,8 @@ import Observation
 import RiviuGitHub
 
 /// Checks GitHub every few minutes for pull requests that newly request your review. For each one it posts a
-/// notification and, if turned on, runs an AI review so the summary is ready when you open it.
+/// notification. If turned on, it also runs an AI review of every waiting request that doesn't have one, so the
+/// summary is ready when you open it.
 @Observable
 final class ReviewRequestWatcher {
     /// Open pull requests waiting for your review, newest activity first.
@@ -18,7 +19,8 @@ final class ReviewRequestWatcher {
     @ObservationIgnored private let inbox: PullRequestInbox
     @ObservationIgnored private let notifications: ReviewRequestNotifications
     @ObservationIgnored private var loop: Task<Void, Never>?
-    @ObservationIgnored private var reviewQueue: [(GitHubPullRequestSummary, PullRequestReference)] = []
+    /// `isNew` is false for requests that were already waiting, which don't get a notification when reviewed.
+    @ObservationIgnored private var reviewQueue: [(summary: GitHubPullRequestSummary, reference: PullRequestReference, isNew: Bool)] = []
     @ObservationIgnored private var isWorkingThroughQueue = false
 
     init(account: GitHubAccount, settings: AppSettings, aiReviews: AIReviewStore, inbox: PullRequestInbox,
@@ -75,20 +77,25 @@ final class ReviewRequestWatcher {
         let seen = UserDefaults.standard.stringArray(forKey: seenKey)
         UserDefaults.standard.set(current.map(\.id), forKey: seenKey)
 
-        // The first check only remembers what's already waiting, so you aren't flooded with old requests.
-        guard let seen else { return }
-        let newRequests = zip(requests, current).filter { !seen.contains($0.1.id) }
-        guard !newRequests.isEmpty else { return }
-
-        inbox.refresh()
-        for (summary, reference) in newRequests {
-            if settings.notifiesAboutReviewRequests {
+        // The first check only remembers what's already waiting, so you aren't notified about old requests.
+        let newRequests = seen.map { seen in zip(requests, current).filter { !seen.contains($0.1.id) } } ?? []
+        if !newRequests.isEmpty {
+            inbox.refresh()
+        }
+        if settings.notifiesAboutReviewRequests {
+            for (summary, reference) in newRequests {
                 notifications.post(title: "Review requested", body: notificationText(for: summary), about: reference)
             }
-            if settings.reviewsNewRequestsWithAI {
-                aiReviews.queue(reference)
-                reviewQueue.append((summary, reference))
-            }
+        }
+
+        guard settings.reviewsNewRequestsWithAI else { return }
+        for (summary, reference) in zip(requests, current) {
+            let isNew = newRequests.contains { $0.1 == reference }
+            // A request that has never been reviewed, and isn't being reviewed or failed already.
+            let neverReviewed = aiReviews.review(for: reference) == nil && aiReviews.activity(for: reference) == nil
+            guard isNew || neverReviewed, !reviewQueue.contains(where: { $0.reference == reference }) else { continue }
+            aiReviews.queue(reference)
+            reviewQueue.append((summary, reference, isNew))
         }
         Task { await workThroughReviewQueue() }
     }
@@ -100,13 +107,13 @@ final class ReviewRequestWatcher {
         guard !isWorkingThroughQueue else { return }
         isWorkingThroughQueue = true
         while !reviewQueue.isEmpty {
-            let (summary, reference) = reviewQueue.removeFirst()
-            await review(summary, reference: reference)
+            let next = reviewQueue.removeFirst()
+            await review(next.summary, reference: next.reference, notifies: next.isNew)
         }
         isWorkingThroughQueue = false
     }
 
-    private func review(_ summary: GitHubPullRequestSummary, reference: PullRequestReference) async {
+    private func review(_ summary: GitHubPullRequestSummary, reference: PullRequestReference, notifies: Bool) async {
         do {
             let pullRequest = try await account.loader.pullRequest(reference)
             await aiReviews.runIfNeeded(for: pullRequest)
@@ -114,7 +121,7 @@ final class ReviewRequestWatcher {
             aiReviews.fail(reference, message: error.localizedDescription)
             return
         }
-        guard settings.notifiesAboutReviewRequests, let review = aiReviews.review(for: reference) else { return }
+        guard notifies, settings.notifiesAboutReviewRequests, let review = aiReviews.review(for: reference) else { return }
         let findings = review.findings.count == 1 ? "1 finding" : "\(review.findings.count) findings"
         notifications.post(title: "Review requested, \(review.risk.rawValue) risk",
                            body: "\(notificationText(for: summary))\nAI summary ready, \(findings).",

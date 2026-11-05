@@ -229,6 +229,11 @@ final class ReviewWorkspace {
     private func show(_ newPullRequest: PullRequest) {
         let previous = location
         pullRequest = newPullRequest
+        // A pull request that has never had an AI review gets one, if automatic reviews are on.
+        let reference = newPullRequest.reference
+        if settings.reviewsNewRequestsWithAI, aiReviews.review(for: reference) == nil, aiReviews.activity(for: reference) == nil {
+            aiReviews.start(for: newPullRequest)
+        }
         fileContents = [:]
         syntaxByPath = [:]
         structuralChangesByPath = [:]

@@ -64,7 +64,11 @@ private struct ReviewRequestsSection: View {
                     }
                 }
                 Toggle("Show a notification", isOn: $settings.notifiesAboutReviewRequests)
-                Toggle("Run an AI review automatically", isOn: $settings.reviewsNewRequestsWithAI)
+            }
+            .disabled(!settings.checksForReviewRequests)
+            // Also covers pull requests you open, so it works even when checking is off.
+            Toggle("Run an AI review automatically", isOn: $settings.reviewsNewRequestsWithAI)
+            Group {
                 HStack {
                     status
                     Spacer()
@@ -76,7 +80,7 @@ private struct ReviewRequestsSection: View {
         } header: {
             Text("Review Requests")
         } footer: {
-            Text("Riviu checks while it's open, including from the menu bar. The AI review uses the provider and model set for AI Review in the AI tab.")
+            Text("Riviu checks while it's open, including from the menu bar. Automatic AI reviews run for review requests and pull requests you open that haven't had one yet, with the provider and model set for AI Review in the AI tab.")
                 .font(.caption)
         }
     }
